@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+feedparser
+httpx
+apscheduler
+pyyaml
+trafilatura
+python-multipart
+pytest

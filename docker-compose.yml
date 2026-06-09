@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  myrss:
+    build: .
+    container_name: myrss-reader
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    volumes:
+      # 将主机上的 data 目录挂载到容器的 /app/data，用于持久化数据库 myrss.db 以及配置文件 config.yaml
+      - ./data:/app/data
+    environment:
+      - PORT=8888
+      - TZ=Asia/Shanghai

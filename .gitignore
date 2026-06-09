@@ -1,0 +1,35 @@
+# Python Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+bin/
+lib/
+include/
+
+# Python Cache & Tests
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Databases & SQLite WAL Files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# User Data & Persistent Docker Volume
+data/
+
+# User Local Configuration (Ignored to protect secrets)
+config.yaml
+
+# Logs
+*.log
+
+# OS Metadata & IDE Configs
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

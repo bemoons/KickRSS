@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>KickRSS — AI RSS Reader</title>
+    <meta name="description" content="A premium AI-powered RSS reader for information completionists.">
+    <!-- PWA Settings -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="KickRSS">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Main Style -->
+    <link rel="stylesheet" href="style.css?v=11.4">
+    <!-- SVG Lightning Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+</head>
+<body class="dark-theme">
+    <div id="app-layout">
+        
+        <!-- COLUMN 1: FEEDS TREE -->
+        <aside id="feeds-column" class="app-panel">
+            <div class="panel-header">
+                <div class="logo-container">
+                    <span class="logo-icon">⚡</span>
+                    <h1 class="logo-text">KickRSS</h1>
+                </div>
+                <div class="header-actions" style="display: flex; gap: 8px;">
+                    <button id="show-profile-btn" class="icon-btn" title="阅读画像">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="2" x2="12" y2="6"></line>
+                            <line x1="12" y1="18" x2="12" y2="22"></line>
+                            <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                            <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                            <line x1="2" y1="12" x2="6" y2="12"></line>
+                            <line x1="18" y1="12" x2="22" y2="12"></line>
+                            <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                            <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                        </svg>
+                    </button>
+                    <button id="theme-toggle-btn" class="icon-btn" title="切换主题 (亮色/暗色/自动)">
+                        <svg class="light-icon hidden" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                        <svg class="dark-icon hidden" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                        <svg class="auto-icon hidden" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor"></path></svg>
+                    </button>
+                    <button id="manage-feeds-btn" class="icon-btn" title="管理订阅源">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    </button>
+                    <button id="add-feed-btn" class="icon-btn" title="添加订阅源">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Global Search Bar -->
+            <div class="search-bar-wrapper">
+                <div class="search-input-box">
+                    <svg class="search-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    <input type="text" id="search-input" placeholder="搜索文章标题或正文..." autocomplete="off">
+                </div>
+            </div>
+            
+            <div class="panel-scroll-content">
+                <div class="quick-links">
+                    <button id="btn-all-unread" class="quick-link-item active">
+                        <span class="item-icon">📬</span>
+                        <span class="item-text">未读文章</span>
+                        <span id="global-unread-count" class="badge">0</span>
+                    </button>
+                    <button id="btn-starred" class="quick-link-item">
+                        <span class="item-icon">⭐</span>
+                        <span class="item-text">我的收藏</span>
+                        <span id="starred-count" class="badge">0</span>
+                    </button>
+                </div>
+                
+                <div class="section-title-container">
+                    <span class="section-title">订阅源</span>
+                </div>
+                
+                <div id="feeds-list" class="tree-list">
+                    <!-- Dynamic feed list items will be injected here -->
+                    <div class="loading-placeholder">正在加载订阅源...</div>
+                </div>
+            </div>
+            
+            <div class="panel-footer">
+                <button id="refresh-all-btn" class="footer-btn" style="flex-grow: 1; justify-content: center; width: 100%; display: flex; align-items: center; gap: 8px;">
+                    <svg id="refresh-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                    刷新所有订阅
+                </button>
+            </div>
+        </aside>
+
+        <div id="resizer-left" class="column-resizer"></div>
+
+        <!-- COLUMN 2: ARTICLES LIST -->
+        <main id="entries-column" class="app-panel">
+            <div class="panel-header">
+                <div class="header-nav">
+                    <button id="mobile-back-to-feeds" class="mobile-only icon-btn">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <div class="title-meta">
+                        <h2 id="current-category-name" class="header-title">所有未读</h2>
+                        <span id="entries-count-label" class="header-subtitle">0 篇文章</span>
+                    </div>
+                </div>
+                
+                <div class="header-filters">
+                    <button id="mark-all-read-btn" class="btn-compact" style="margin-right: 12px; display: none;" title="将当前列表中的文章全部标记为已读">
+                        一键已读
+                    </button>
+                    <div class="toggle-container">
+                        <label class="switch">
+                            <input type="checkbox" id="filter-unread-toggle" checked>
+                            <span class="slider round"></span>
+                        </label>
+                        <span class="toggle-label">仅未读</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel-scroll-content">
+                <div id="entries-list" class="card-list">
+                    <!-- Dynamic entry cards will be injected here -->
+                    <div class="empty-state">
+                        <span class="empty-icon">☕</span>
+                        <h3>暂无文章</h3>
+                        <p>请选择左侧分类，或导入新的订阅源开始阅读。</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <div id="resizer-right" class="column-resizer"></div>
+
+        <!-- COLUMN 3: ARTICLE DETAIL & AI HELPER -->
+        <section id="detail-column" class="app-panel">
+            <!-- Mobile header back button -->
+            <div class="panel-header mobile-only">
+                <button id="mobile-back-to-entries" class="icon-btn">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                </button>
+                <span class="header-title">文章正文与 AI 摘要</span>
+            </div>
+
+            <!-- Empty Detail State -->
+            <div id="detail-empty-state" class="empty-state-container">
+                <div class="glowing-orb"></div>
+                <div class="empty-state-content">
+                    <div class="wireframe-graphic">
+                        <svg viewBox="0 0 100 100" width="80" height="80">
+                            <rect x="20" y="15" width="60" height="70" rx="6" stroke="rgba(255,255,255,0.15)" stroke-width="2" fill="none"></rect>
+                            <line x1="30" y1="30" x2="70" y2="30" stroke="rgba(99, 102, 241, 0.4)" stroke-width="3" stroke-linecap="round"></line>
+                            <line x1="30" y1="45" x2="60" y2="45" stroke="rgba(255,255,255,0.2)" stroke-width="2" stroke-linecap="round"></line>
+                            <line x1="30" y1="55" x2="70" y2="55" stroke="rgba(255,255,255,0.2)" stroke-width="2" stroke-linecap="round"></line>
+                            <circle cx="50" cy="50" r="18" fill="none" stroke="rgba(99, 102, 241, 0.6)" stroke-width="2" stroke-dasharray="4 4"></circle>
+                        </svg>
+                    </div>
+                    <h3>阅读新视界</h3>
+                    <p>选择中栏文章，开启 AI 一键摘要、标题党识别与即时追问对话。</p>
+                </div>
+            </div>
+            
+            <!-- Article Detail View -->
+            <div id="detail-active-view" class="detail-layout hidden">
+                
+                <!-- 固定操作栏（不滚动，桌面端在上，移动端在下） -->
+                <div class="article-actions-bar">
+                    <div class="article-actions-inner">
+                        <div class="bar-section attention-section">
+                            <span class="bar-label">评级:</span>
+                            <div class="attention-btn-group">
+                                <button id="attn-btn-glance" class="bar-icon-btn glance" data-level="glance" title="评级：掠读">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                    <span class="btn-text">掠读</span>
+                                </button>
+                                <button id="attn-btn-skim" class="bar-icon-btn skim" data-level="skim" title="评级：扫读">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                                    <span class="btn-text">扫读</span>
+                                </button>
+                                <button id="attn-btn-read" class="bar-icon-btn read" data-level="read" title="评级：精读">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
+                                    <span class="btn-text">精读</span>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="bar-section utility-section">
+                            <button id="art-toggle-star-btn" class="bar-icon-btn star-status" title="收藏">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                                <span class="btn-text">收藏</span>
+                            </button>
+                            <button id="art-toggle-read-btn" class="bar-icon-btn read-status" title="设为已读">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                                <span class="btn-text">已读</span>
+                            </button>
+                            <a id="art-original-link" href="#" target="_blank" class="bar-icon-btn original" title="访问原文">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                                <span class="btn-text">原文</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- ARTICLE CONTENT AREA -->
+                <div class="article-scroll-view">
+                    <article id="article-main" class="article-body">
+                        <header class="article-header">
+                            <div class="article-meta">
+                                <span id="art-feed-badge" class="badge-accent">爱范儿</span>
+                                <span id="art-author" class="art-author">作者</span>
+                                <span id="art-date" class="art-date">今天 12:00</span>
+                            </div>
+                            <h2 class="art-title">
+                                <a id="art-title-link" href="#" target="_blank" title="在新标签页中打开原文">文章标题加载中...</a>
+                            </h2>
+                        </header>
+                        
+                        <!-- AI SUMMARY PANEL -->
+                        <div id="ai-summary-block" class="ai-box">
+                            <div class="ai-box-header">
+                                <span class="ai-title-tag">
+                                    <span class="sparkle-icon">✨</span> AI 智能摘要
+                                </span>
+                                <span id="summary-meta-info" style="font-size: 11px; color: var(--text-muted); font-weight: normal; margin-left: 10px; flex-grow: 1; text-align: right; padding-right: 15px;"></span>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <button id="regenerate-summary-btn" class="btn-compact" title="重新生成 AI 摘要">🔄 重新生成</button>
+                                    <span id="summary-status-badge" class="status-indicator loading">生成中...</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Clickbait Alert Banner -->
+                            <div id="clickbait-banner" class="alert-banner warning hidden">
+                                <span class="alert-icon">⚠️</span>
+                                <div class="alert-content">
+                                    <strong>标题党警告：</strong>
+                                    <span id="clickbait-text">标题与内容存在偏差。</span>
+                                </div>
+                            </div>
+                            
+                            <div id="summary-content" class="ai-box-body">
+                                正在分析文章内容并生成摘要...
+                            </div>
+                        </div>
+                        
+                        <!-- ARTICLE FULL TEXT (EXPANDABLE) -->
+                        <div class="fulltext-expander-section">
+                            <div class="fulltext-controls" style="display: flex; gap: 12px; margin-bottom: 12px; align-items: center;">
+                                <button id="toggle-fulltext-btn" class="action-btn-secondary">
+                                    <span id="expander-text">展开阅读全文</span>
+                                    <svg id="expander-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </button>
+                                <button id="art-translate-btn" class="action-btn-secondary hidden" style="color: var(--accent-color, #6366f1); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+                                    <span class="translate-spark">🌐</span>
+                                    <span class="btn-text">对照翻译</span>
+                                </button>
+                            </div>
+                            <div id="fulltext-content-area" class="fulltext-body hidden">
+                                <!-- Cleaned article content will go here -->
+                            </div>
+                        </div>
+                    </article>
+                </div>
+                
+                <!-- BACK TO TOP BUTTON -->
+                <button id="back-to-top-btn" class="back-to-top-btn" title="回到顶部">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="19" x2="12" y2="5"></line>
+                        <polyline points="5 12 12 5 19 12"></polyline>
+                    </svg>
+                </button>
+                
+                <!-- RIGHT CHAT PANEL -->
+                <div id="chat-section" class="chat-container">
+                    <div class="chat-header">
+                        <div class="chat-header-top">
+                            <h3>💬 AI 追问对话</h3>
+                            <button id="close-chat-drawer-btn" class="close-drawer-btn" title="关闭 AI 对话">&times;</button>
+                        </div>
+                        <span class="chat-desc">围绕本文内容进行自由追问</span>
+                    </div>
+                    
+                    <div id="chat-history" class="chat-messages-view">
+                        <div class="system-message">
+                            您可以针对正文或摘要内容，向 AI 提出任何疑问或进行深度拓展探讨。
+                        </div>
+                    </div>
+                    
+                    <form id="chat-input-form" class="chat-input-area">
+                        <input type="text" id="chat-input-field" placeholder="输入关于本文的追问..." autocomplete="off">
+                        <button type="submit" id="chat-send-btn" class="chat-submit-btn">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                        </button>
+                    </form>
+                </div>
+                
+                <!-- FLOATING AI TOGGLE BUTTON -->
+                <button id="toggle-chat-drawer-btn" class="floating-ai-btn" title="开启 AI 问答助手">
+                    <span class="sparkle-icon">✨</span>
+                    <span class="btn-text">AI 问答</span>
+                </button>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- MODAL: ADD FEED -->
+    <div id="add-feed-modal" class="modal-overlay hidden">
+        <div class="modal-container glass">
+            <div class="modal-header">
+                <h3>新增订阅源</h3>
+                <button class="close-modal-btn icon-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">输入任意 RSS/Atom 订阅源链接，AI 将自动分析并创建分类。</p>
+                <div class="input-group">
+                    <input type="url" id="feed-url-input" placeholder="https://example.com/rss.xml" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn secondary close-modal-btn">取消</button>
+                <button id="submit-feed-btn" class="modal-btn primary">确定添加</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: OPML IMPORT -->
+    <div id="opml-modal" class="modal-overlay hidden">
+        <div class="modal-container glass">
+            <div class="modal-header">
+                <h3>导入 OPML 订阅表</h3>
+                <button class="close-modal-btn icon-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">选择从其他阅读器（如 Feedly, NetNewsWire）导出的 .opml 文件导入。</p>
+                <div class="file-upload-box">
+                    <input type="file" id="opml-file-input" accept=".xml,.opml" style="display:none">
+                    <div id="file-drop-zone" class="drop-zone">
+                        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        <span id="file-upload-label">点击或拖拽 OPML 文件到这里</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn secondary close-modal-btn">取消</button>
+                <button id="submit-opml-btn" class="modal-btn primary" disabled>开始导入</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: MANAGE FEEDS / SYSTEM SETTINGS -->
+    <div id="manage-feeds-modal" class="modal-overlay hidden">
+        <div class="modal-container glass" style="max-width: 600px; width: 90%;">
+            <div class="modal-header" style="flex-direction: column; align-items: stretch; gap: 12px; padding-bottom: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="font-size: 16px; font-weight: 700; font-family: var(--font-title);">系统管理中心</h3>
+                    <button class="close-modal-btn icon-btn">&times;</button>
+                </div>
+                <!-- Tabs -->
+                <div class="modal-tabs" style="display: flex; border-bottom: 1px solid var(--border-color); margin-top: 8px;">
+                    <button id="tab-btn-feeds" class="tab-btn active" style="flex: 1; padding: 10px; background: transparent; border: none; cursor: pointer; font-size: 13px; font-weight: 600; text-align: center; font-family: inherit;">订阅源管理</button>
+                    <button id="tab-btn-settings" class="tab-btn" style="flex: 1; padding: 10px; background: transparent; border: none; cursor: pointer; font-size: 13px; font-weight: 600; text-align: center; font-family: inherit;">系统参数设置</button>
+                </div>
+            </div>
+            
+            <div class="modal-body" style="padding-top: 16px;">
+                <!-- TAB 1: FEEDS LIST -->
+                <div id="tab-content-feeds" class="tab-content">
+                    <div class="manage-feeds-actions" style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+                        <span class="modal-desc" style="margin-bottom: 0; flex-grow: 1;">管理您的订阅源（改名、启用/禁用、删除或备份导出）。</span>
+                        <div style="display: flex; gap: 8px; flex-shrink: 0;">
+                            <button id="opml-import-btn" class="modal-btn secondary" style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; height: auto; font-size: 13px;">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                导入 OPML
+                            </button>
+                            <button id="opml-export-btn" class="modal-btn secondary" style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; height: auto; font-size: 13px;">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                导出 OPML
+                            </button>
+                        </div>
+                    </div>
+                    <div id="manage-feeds-list" class="manage-list" style="max-height: 320px; overflow-y: auto; padding-right: 4px;">
+                        <!-- Dynamic feed rows will be injected here -->
+                        <div class="loading-placeholder">正在加载订阅源列表...</div>
+                    </div>
+                </div>
+                
+                <!-- TAB 2: SYSTEM CONFIG FORM -->
+                <div id="tab-content-settings" class="tab-content hidden">
+                    <form id="system-settings-form" style="max-height: 320px; overflow-y: auto; padding-right: 8px; display: flex; flex-direction: column; gap: 16px;">
+                        <!-- Group: Ingestion -->
+                        <div class="settings-group">
+                            <h4 class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">📡 抓取与轮询设置</h4>
+                            <div class="form-row" style="display: flex; gap: 12px; margin-bottom: 10px;">
+                                <div style="flex: 1;">
+                                    <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">抓取周期 (分钟)</label>
+                                    <input type="number" id="setting-fetch-interval" class="form-input" min="1" max="1440" required style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                </div>
+                                <div style="flex: 1;">
+                                    <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">全文判定长度阈值</label>
+                                    <input type="number" id="setting-min-text-chars" class="form-input" min="50" max="2000" required style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Group: Default AI -->
+                        <div class="settings-group">
+                            <h4 class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">🤖 默认 AI 端点配置</h4>
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <div>
+                                    <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">API Base URL</label>
+                                    <input type="url" id="setting-ai-url" class="form-input" required style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                </div>
+                                <div>
+                                    <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">API Key</label>
+                                    <input type="password" id="setting-ai-key" class="form-input" placeholder="输入密钥..." style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                </div>
+                                <div>
+                                    <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">AI 模型名称</label>
+                                    <input type="text" id="setting-ai-model" class="form-input" required style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Group: Task Toggles -->
+                        <div class="settings-group">
+                            <h4 class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">🧠 AI 任务与自演化设置</h4>
+                            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div style="flex-grow: 1; padding-right: 12px;">
+                                        <span style="font-size: 12px; font-weight: 500; display: block; color: var(--text-primary);">点击文章时自动生成 AI 摘要</span>
+                                        <span style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px;">若关闭，则需要打开右侧对话框时才会按需生成摘要</span>
+                                    </div>
+                                    <label class="feed-switch">
+                                        <input type="checkbox" id="setting-ai-auto-summary" checked>
+                                        <span class="feed-slider"></span>
+                                    </label>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div style="flex-grow: 1; padding-right: 12px;">
+                                        <span style="font-size: 12px; font-weight: 500; display: block; color: var(--text-primary);">精读文章后台预生成摘要</span>
+                                        <span style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px;">启用后，后台会在拉取到 read 注意力档的文章时自动生成摘要</span>
+                                    </div>
+                                    <label class="feed-switch">
+                                        <input type="checkbox" id="setting-ai-pregenerate">
+                                        <span class="feed-slider"></span>
+                                    </label>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div style="flex-grow: 1; padding-right: 12px;">
+                                        <span style="font-size: 12px; font-weight: 500; display: block; color: var(--text-primary);">流式输出摘要和聊天</span>
+                                        <span style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px;">启用后，摘要和右侧聊天会以打字机流式效果打字输出</span>
+                                    </div>
+                                    <label class="feed-switch">
+                                        <input type="checkbox" id="setting-ai-stream" checked>
+                                        <span class="feed-slider"></span>
+                                    </label>
+                                </div>
+                                <div class="form-row" style="display: flex; gap: 12px; margin-bottom: 10px;">
+                                    <div style="flex: 1;">
+                                        <label id="label-target-lang" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">目标语言（摘要、翻译、问答）</label>
+                                        <select id="setting-ai-summary-lang" class="form-input" style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                            <option value="auto">跟随原文 (Auto)</option>
+                                            <option value="zh">简体中文 (Simplified Chinese)</option>
+                                            <option value="zh-hant">繁体中文 (Traditional Chinese)</option>
+                                            <option value="en">英文 (English)</option>
+                                            <option value="ja">日语 (Japanese)</option>
+                                            <option value="ko">韩语 (Korean)</option>
+                                            <option value="fr">法语 (French)</option>
+                                            <option value="es">西班牙语 (Spanish)</option>
+                                            <option value="de">德语 (German)</option>
+                                            <option value="ru">俄语 (Russian)</option>
+                                            <option value="pt">葡萄牙语 (Portuguese)</option>
+                                            <option value="it">意大利语 (Italian)</option>
+                                        </select>
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <label id="label-ui-lang" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">系统界面语言</label>
+                                        <select id="setting-system-lang" class="form-input" style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                            <option value="zh">简体中文 (Simplified Chinese)</option>
+                                            <option value="zh-hant">繁体中文 (Traditional Chinese)</option>
+                                            <option value="en">English</option>
+                                            <option value="ja">日本語 (Japanese)</option>
+                                            <option value="ko">한국어 (Korean)</option>
+                                            <option value="fr">Français (French)</option>
+                                            <option value="es">Español (Spanish)</option>
+                                            <option value="de">Deutsch (German)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+                                    <div style="padding-right: 15px;">
+                                        <label class="form-label" style="display: block; font-size: 12px; color: var(--text-primary); margin-bottom: 2px;">阅读画像与智能分级</label>
+                                        <span class="modal-desc" style="margin-bottom: 0; font-size: 11px; color: var(--text-muted); display: block; max-width: 420px; line-height: 1.4;">
+                                            开启后，系统将根据你的阅读习惯自动优化文章注意力分级。每日凌晨会消耗一次 AI 额度（约 2000-3000 token）用于分析阅读偏好。行为数据仅存储在本地。
+                                        </span>
+                                    </div>
+                                    <label class="feed-switch" style="flex-shrink: 0;">
+                                        <input type="checkbox" id="setting-interest-profile-enabled">
+                                        <span class="feed-slider"></span>
+                                    </label>
+                                </div>
+                                <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;">
+                                    <div style="flex: 1;">
+                                        <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;" title="未归类主题自动提升为正式抽屉所需要达到的频次门槛">自动建抽屉频次阈值</label>
+                                        <input type="number" id="setting-promote-threshold" class="form-input" min="1" max="100" required style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <button type="button" id="btn-manual-maintenance" class="modal-btn secondary" style="width: 100%; height: 34px; font-size: 11px; padding: 0 10px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: 1px solid rgba(99, 102, 241, 0.3); color: #818cf8; background: rgba(99, 102, 241, 0.03); cursor: pointer; transition: all 0.2s;">
+                                            ⚙️ 立即执行每日维护任务
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Group: Chat (Advanced) -->
+                        <div class="settings-group">
+                            <h4 class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">💬 对话 API 独立配置 (可选)</h4>
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <div>
+                                    <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">对话 Base URL (留空默认使用全局)</label>
+                                    <input type="url" id="setting-chat-url" class="form-input" placeholder="http://..." style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                </div>
+                                <div>
+                                    <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">对话 API Key (可选，留空则继承全局)</label>
+                                    <input type="password" id="setting-chat-key" class="form-input" placeholder="api-key..." style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                </div>
+                                <div style="display: flex; gap: 12px;">
+                                    <div style="flex: 1;">
+                                        <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">对话模型名称 (留空默认)</label>
+                                        <input type="text" id="setting-chat-model" class="form-input" placeholder="默认..." style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">对话 Token 限制</label>
+                                        <input type="number" id="setting-chat-tokens" class="form-input" min="100" max="8000" style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn secondary close-modal-btn">关闭</button>
+                <button id="settings-save-btn" class="modal-btn primary hidden">保存设置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: READING PROFILE / PERSONALIZATION -->
+    <div id="profile-modal" class="modal-overlay hidden">
+        <div class="modal-container glass" style="max-width: 720px; width: 95%; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; padding: 0;">
+            <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;">
+                <h3 style="margin: 0; font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                    📊 <span id="label-profile-title">我的阅读画像</span>
+                </h3>
+                <button class="close-modal-btn icon-btn" id="close-profile-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px;">
+                <!-- Cold Start / Disabled View -->
+                <div id="profile-status-view" class="hidden" style="text-align: center; padding: 40px 20px;">
+                    <div style="font-size: 40px; margin-bottom: 12px;">📊</div>
+                    <h3 id="profile-status-title" style="margin-bottom: 8px; font-size: 15px;">智能画像未生成</h3>
+                    <p id="profile-status-desc" style="font-size: 12px; color: var(--text-muted); max-width: 380px; margin: 0 auto; line-height: 1.5;"></p>
+                </div>
+                
+                <!-- Main Profile Content -->
+                <div id="profile-main-content" style="display: flex; flex-direction: column; gap: 20px;">
+                    <!-- Stats Cards -->
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                        <div class="profile-stat-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; text-align: center;">
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">近30天总阅读</div>
+                            <div id="profile-stat-total" style="font-size: 18px; font-weight: 700; color: var(--text-primary);">0</div>
+                        </div>
+                        <div class="profile-stat-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; text-align: center;">
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">深度阅读 (读)</div>
+                            <div id="profile-stat-high" style="font-size: 18px; font-weight: 700; color: var(--accent-indigo, #6366f1);">0</div>
+                        </div>
+                        <div class="profile-stat-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; text-align: center;">
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">快速跳过 (看)</div>
+                            <div id="profile-stat-low" style="font-size: 18px; font-weight: 700; color: var(--text-muted);">0</div>
+                        </div>
+                    </div>
+
+                    <!-- Interest Tag Cloud -->
+                    <div>
+                        <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: var(--text-secondary);">🎯 兴趣标签云</h4>
+                        <div id="profile-tag-cloud" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 15px; background: rgba(0,0,0,0.1); border-radius: 8px; border: 1px solid var(--border-color); min-height: 80px; align-items: center;">
+                            <!-- Dynamically generated tags -->
+                        </div>
+                    </div>
+
+                    <!-- Tag Detail Panel (Click tag to expand) -->
+                    <div id="profile-detail-panel" class="hidden" style="border: 1px solid var(--border-color); border-radius: 8px; background: rgba(255,255,255,0.02); overflow: hidden; display: flex; flex-direction: column; transition: all 0.3s ease;">
+                        <div style="padding: 10px 16px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.2);">
+                            <span id="profile-detail-title" style="font-size: 13px; font-weight: 600; color: var(--accent-indigo, #6366f1);">话题详情</span>
+                            <button id="close-profile-detail-btn" style="background: none; border: none; font-size: 16px; color: var(--text-secondary); cursor: pointer; padding: 0 4px;">&times;</button>
+                        </div>
+                        <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+                            <div id="profile-detail-stats" style="display: flex; gap: 16px; font-size: 11px; color: var(--text-secondary);">
+                                <div>深度阅读: <span id="profile-detail-count" style="font-weight: 600; color: var(--text-primary);">0</span> 篇</div>
+                                <div>已收藏: <span id="profile-detail-starred" style="font-weight: 600; color: var(--text-primary);">0</span> 篇</div>
+                                <div>访问原文: <span id="profile-detail-original" style="font-weight: 600; color: var(--text-primary);">0</span> 次</div>
+                            </div>
+                            <!-- Weekly Trend Chart -->
+                            <div>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">近12周阅读活跃度趋势</div>
+                                <div id="profile-detail-trend" style="display: flex; align-items: flex-end; justify-content: space-between; height: 50px; padding: 0 10px; background: rgba(0,0,0,0.15); border-radius: 6px; border: 1px solid var(--border-color);">
+                                    <!-- 12 columns -->
+                                </div>
+                            </div>
+                            <!-- Articles list -->
+                            <div>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">代表文章</div>
+                                <div id="profile-detail-articles" style="display: flex; flex-direction: column; gap: 6px; max-height: 150px; overflow-y: auto;">
+                                    <!-- List of articles -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Heatmap Grid -->
+                    <div>
+                        <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: var(--text-secondary);">📅 话题关注趋势 (近12周)</h4>
+                        <div style="padding: 15px; background: rgba(0,0,0,0.1); border-radius: 8px; border: 1px solid var(--border-color); overflow-x: auto;">
+                            <div id="profile-heatmap-container" style="display: flex; flex-direction: column; gap: 6px; min-width: 480px;">
+                                <!-- Grid rows -->
+                            </div>
+                            <!-- Legend -->
+                            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 4px; font-size: 10px; color: var(--text-secondary); margin-top: 8px;">
+                                <span>少</span>
+                                <div style="width: 10px; height: 10px; background: transparent; border: 1px solid var(--border-color);"></div>
+                                <div style="width: 10px; height: 10px; background: rgba(99,102,241,0.25);"></div>
+                                <div style="width: 10px; height: 10px; background: rgba(99,102,241,0.5);"></div>
+                                <div style="width: 10px; height: 10px; background: rgba(99,102,241,0.75);"></div>
+                                <div style="width: 10px; height: 10px; background: rgba(99,102,241,1);"></div>
+                                <span>多</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Insight -->
+                    <div id="profile-insight-box" style="border-left: 3px solid var(--accent-indigo, #6366f1); padding: 10px 14px; background: rgba(255,255,255,0.02); border-radius: 0 6px 6px 0; font-size: 12px; line-height: 1.5; color: var(--text-muted);">
+                        💡 <span id="profile-insight-text">阅读偏好提炼中...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+                <button class="modal-btn secondary close-modal-btn" id="close-profile-modal-btn-footer">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main JavaScript Application -->
+    <script src="app.js?v=5.4"></script>
+</body>
+</html>

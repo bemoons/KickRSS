@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="1.0">
+  <head>
+    <title>Feeds of bemoon Lee from Inoreader [https://www.inoreader.com]</title>
+  </head>
+  <body>
+    <outline text="IT 之家" title="IT 之家" type="rss" xmlUrl="https://www.ithome.com/rss/" htmlUrl="https://www.ithome.com/"/>
+    <outline text="cnBeta 全文版" title="cnBeta 全文版" type="rss" xmlUrl="https://feeds2.feedburner.com/cnbeta-full" htmlUrl="https://pipes.yahoo.com/pipes/pipe.info?_id=5OVll5Fs3hGCc1KftJCjyQ"/>
+    <outline text="虎嗅" title="虎嗅" type="rss" xmlUrl="https://rss.huxiu.com/" htmlUrl="https://www.huxiu.com/"/>
+    <outline text="Solidot" title="Solidot" type="rss" xmlUrl="https://feeds.feedburner.com/solidot" htmlUrl="https://www.solidot.org/"/>
+    <outline text="阮一峰的网络日志" title="阮一峰的网络日志" type="rss" xmlUrl="https://feeds.feedburner.com/ruanyifeng" htmlUrl="https://www.ruanyifeng.com/blog/"/>
+  </body>
+</opml>
