@@ -379,11 +379,11 @@
                         <span class="modal-desc" style="margin-bottom: 0; flex-grow: 1;">管理您的订阅源（改名、启用/禁用、删除或备份导出）。</span>
                         <div style="display: flex; gap: 8px; flex-shrink: 0;">
                             <button id="opml-import-btn" class="modal-btn secondary" style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; height: auto; font-size: 13px;">
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                                 导入 OPML
                             </button>
                             <button id="opml-export-btn" class="modal-btn secondary" style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; height: auto; font-size: 13px;">
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                                 导出 OPML
                             </button>
                         </div>
@@ -397,6 +397,15 @@
                 <!-- TAB 2: SYSTEM CONFIG FORM -->
                 <div id="tab-content-settings" class="tab-content hidden">
                     <form id="system-settings-form" style="max-height: 320px; overflow-y: auto; padding-right: 8px; display: flex; flex-direction: column; gap: 16px;">
+                        <!-- Group: Frontend-Backend Decoupling -->
+                        <div class="settings-group">
+                            <h4 class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">🌐 API 服务器配置</h4>
+                            <div>
+                                <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">后端 API 地址 (留空表示同域托管，例如 http://localhost:8888)</label>
+                                <input type="url" id="setting-api-base" class="form-input" placeholder="例如 http://localhost:8888" style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                            </div>
+                        </div>
+
                         <!-- Group: Ingestion -->
                         <div class="settings-group">
                             <h4 class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">📡 抓取与轮询设置</h4>
@@ -414,11 +423,11 @@
                         
                         <!-- Group: Default AI -->
                         <div class="settings-group">
-                            <h4 class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">🤖 默认 AI 端点配置</h4>
+                            <h4 class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">🤖 默认 AI 端点配置 (可选)</h4>
                             <div style="display: flex; flex-direction: column; gap: 8px;">
                                 <div>
                                     <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">API Base URL</label>
-                                    <input type="url" id="setting-ai-url" class="form-input" required style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                    <input type="url" id="setting-ai-url" class="form-input" placeholder="留空以关闭 AI 功能..." style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
                                 </div>
                                 <div>
                                     <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">API Key</label>
@@ -426,7 +435,7 @@
                                 </div>
                                 <div>
                                     <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">AI 模型名称</label>
-                                    <input type="text" id="setting-ai-model" class="form-input" required style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                    <input type="text" id="setting-ai-model" class="form-input" placeholder="留空以关闭 AI 功能..." style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
                                 </div>
                             </div>
                         </div>

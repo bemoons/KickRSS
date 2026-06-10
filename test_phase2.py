@@ -50,7 +50,7 @@ def test_ai_seeding_and_classification(client):
     mock_categories = ["Tech", "Cooking"]
     
     # Mock classification batch results
-    def mock_classify_batch(allowed_categories, entries):
+    def mock_classify_batch(allowed_categories, entries, interest_profile_prompt=""):
         # We simulate the AI response
         results = []
         for e in entries:
@@ -136,3 +136,71 @@ def test_classification_fallback(client):
             
             assert entry["category_id"] == cat_names["未归类"]
             assert entry["attention"] == "skim"
+
+def test_auto_seeding_on_refresh(client):
+    from scheduler import refresh_single_feed
+    
+    # Setup mock feed result
+    mock_entries = [
+        RawEntry(guid="guid_a", title="AI model advances", url="http://linka", author="AuthorA", published_at="2026-06-05T00:00:00", raw_content="AI content"),
+        RawEntry(guid="guid_b", title="Fintech startup blooms", url="http://linkb", author="AuthorB", published_at="2026-06-05T01:00:00", raw_content="Fintech content")
+    ]
+    mock_fetch_result = FetchResult(
+        entries=mock_entries,
+        etag="etag_init",
+        last_modified="lm_init",
+        status_code=200,
+        feed_title="Tech Influx",
+        site_url="http://techinflux.com"
+    )
+    
+    # 1. Add feed when AI seeding fails/returns empty list
+    with patch.object(FeedparserIngester, "fetch_new", return_value=mock_fetch_result), \
+         patch("ai.generate_seed_categories", return_value=[]):
+        
+        response = client.post("/feeds", json={"url": "https://techinflux.com/rss.xml"})
+        assert response.status_code == 200
+        feed_id = response.json()["id"]
+        
+        # Verify that feed has seeded = 0 in database
+        with db.get_db() as conn:
+            feed = crud.get_feed_by_id(conn, feed_id)
+            assert feed["seeded"] == 0
+            
+            # Verify only default "未归类" category exists
+            cats = crud.get_categories_for_feed(conn, feed_id)
+            assert len(cats) == 1
+            assert cats[0]["name"] == "未归类"
+            
+    # 2. Refresh the feed now that AI/LLM is "configured" and generate_seed_categories works
+    mock_fetch_not_modified = FetchResult(
+        entries=[],
+        etag="etag_init",
+        last_modified="lm_init",
+        status_code=304,
+        not_modified=True
+    )
+    
+    with patch.object(FeedparserIngester, "fetch_new", return_value=mock_fetch_not_modified), \
+         patch("ai.generate_seed_categories", return_value=["AI", "Fintech"]) as mock_seed_call, \
+         patch("ai.classify_entries_batch", return_value=[
+             {"id": 1, "category": "AI", "attention": "read"},
+             {"id": 2, "category": "Fintech", "attention": "read"}
+         ]):
+         
+        refresh_single_feed(feed_id)
+        
+        # Verify seed categories was called
+        mock_seed_call.assert_called_once()
+        
+        with db.get_db() as conn:
+            # Verify feed is now marked as seeded = 1
+            feed = crud.get_feed_by_id(conn, feed_id)
+            assert feed["seeded"] == 1
+            
+            # Verify new categories were saved
+            cats = crud.get_categories_for_feed(conn, feed_id)
+            cat_names = {c["name"] for c in cats}
+            assert "AI" in cat_names
+            assert "Fintech" in cat_names
+            assert "未归类" in cat_names

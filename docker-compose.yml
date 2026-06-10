@@ -1,15 +1,17 @@
+name: myrss-refactored
 version: '3.8'
 
 services:
   myrss:
-    build: .
-    container_name: myrss-reader
+    build:
+      context: .
+    image: myrss-refactored:latest
+    container_name: myrss-refactored
     restart: unless-stopped
-    ports:
-      - "8888:8888"
+    network_mode: "host"
     volumes:
       # 将主机上的 data 目录挂载到容器的 /app/data，用于持久化数据库 myrss.db 以及配置文件 config.yaml
       - ./data:/app/data
     environment:
-      - PORT=8888
+      - PORT=9999
       - TZ=Asia/Shanghai

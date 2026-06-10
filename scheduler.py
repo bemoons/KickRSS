@@ -6,6 +6,7 @@ from apscheduler.triggers.cron import CronTrigger
 from config import settings
 from db import get_db
 import crud
+import ai
 from ingester import FeedparserIngester
 from maintenance import run_all_feeds_maintenance
 
@@ -13,6 +14,59 @@ logger = logging.getLogger(__name__)
 
 # Single global scheduler instance
 scheduler = BackgroundScheduler()
+
+def ensure_feed_seeded(feed_id: int) -> bool:
+    """
+    Check if the feed is seeded. If not, and classification is enabled,
+    try to seed categories using recent entries.
+    Returns True if successfully seeded or already seeded.
+    """
+    with get_db() as conn:
+        feed = crud.get_feed_by_id(conn, feed_id)
+        if not feed:
+            return False
+        if not feed["need_classification"]:
+            if not feed["seeded"]:
+                cursor = conn.cursor()
+                cursor.execute("UPDATE feeds SET seeded = 1 WHERE id = ?", (feed_id,))
+                conn.commit()
+            return True
+        if feed["seeded"]:
+            return True
+            
+        # Try to gather recent titles to generate seed categories
+        cursor = conn.cursor()
+        cursor.execute("SELECT title FROM entries WHERE feed_id = ? ORDER BY published_at DESC LIMIT 100", (feed_id,))
+        titles = [r["title"] for r in cursor.fetchall() if r["title"]]
+        
+    if not titles:
+        # No entries yet to seed from
+        return False
+        
+    logger.info(f"Feed {feed_id} is not seeded. Attempting to generate seed categories with {len(titles)} articles.")
+    try:
+        seed_categories = ai.generate_seed_categories(titles)
+        if seed_categories:
+            logger.info(f"Successfully generated seed categories for feed {feed_id}: {seed_categories}")
+            with get_db() as conn:
+                crud.save_categories(conn, feed_id, seed_categories)
+                default_cat_id = crud.get_default_category(conn, feed_id)
+                cursor = conn.cursor()
+                # Reset previously classified entries in default category back to NULL
+                # so the classifier will re-classify them into the newly seeded categories.
+                cursor.execute(
+                    "UPDATE entries SET category_id = ?, classified_at = NULL WHERE feed_id = ? AND category_id = ?",
+                    (default_cat_id, feed_id, default_cat_id)
+                )
+                cursor.execute("UPDATE feeds SET seeded = 1 WHERE id = ?", (feed_id,))
+                conn.commit()
+            return True
+        else:
+            logger.warning(f"AI generated empty seed categories for feed {feed_id} (possibly LLM not configured). Will retry later.")
+            return False
+    except Exception as e:
+        logger.error(f"Failed to auto-seed categories for feed {feed_id}: {e}", exc_info=True)
+        return False
 
 def refresh_single_feed(feed_id: int) -> tuple[int, int]:
     """
@@ -38,6 +92,12 @@ def refresh_single_feed(feed_id: int) -> tuple[int, int]:
         raise
         
     if result.not_modified:
+        # Check if the feed needs seeding even if there were no new entries
+        try:
+            ensure_feed_seeded(feed_id)
+        except Exception as e:
+            logger.error(f"Failed to ensure feed {feed_id} is seeded: {e}", exc_info=True)
+            
         with get_db() as conn:
             crud.update_feed_fetch_status(conn, feed_id, etag, last_modified)
         return 0, 0
@@ -56,6 +116,12 @@ def refresh_single_feed(feed_id: int) -> tuple[int, int]:
         with get_db() as conn:
             crud.update_feed_fetch_status(conn, feed_id, result.etag, result.last_modified)
             
+    # Ensure feed is seeded if it wasn't already
+    try:
+        ensure_feed_seeded(feed_id)
+    except Exception as e:
+        logger.error(f"Failed to ensure feed {feed_id} is seeded: {e}", exc_info=True)
+        
     # Classify any unclassified entries for this feed (either new or reset/fallback ones)
     try:
         from classifier import classify_feed_entries

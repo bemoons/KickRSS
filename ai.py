@@ -118,8 +118,8 @@ def generate_seed_categories(titles: List[str]) -> List[str]:
         return clean_categories
     except Exception as e:
         logger.error(f"Failed to generate seed categories: {e}", exc_info=True)
-        # Return fallback default categories
-        return ["Tech", "News", "Insight"]
+        # Return empty list on fallback so no custom categories are seeded without AI
+        return []
 
 def classify_entries_batch(
     allowed_categories: List[str], 

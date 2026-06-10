@@ -1,3 +1,26 @@
+// Hook/override global fetch and EventSource to support frontend-backend decoupling (configurable backend URL)
+(function() {
+    const apiBase = window.localStorage.getItem('KICKRSS_API_BASE') || '';
+    if (apiBase) {
+        const originalFetch = window.fetch;
+        window.fetch = function(input, init) {
+            if (typeof input === 'string' && input.startsWith('/')) {
+                input = apiBase + input;
+            }
+            return originalFetch(input, init);
+        };
+
+        const OriginalEventSource = window.EventSource;
+        window.EventSource = function(url, configuration) {
+            if (typeof url === 'string' && url.startsWith('/')) {
+                url = apiBase + url;
+            }
+            return new OriginalEventSource(url, configuration);
+        };
+        window.EventSource.prototype = OriginalEventSource.prototype;
+    }
+})();
+
 // Global State Management
 const state = {
     feeds: [],
@@ -104,6 +127,7 @@ const elements = {
     systemSettingsForm: document.getElementById('system-settings-form'),
     
     // Settings inputs
+    settingApiBase: document.getElementById('setting-api-base'),
     settingFetchInterval: document.getElementById('setting-fetch-interval'),
     settingMinTextChars: document.getElementById('setting-min-text-chars'),
     settingAiUrl: document.getElementById('setting-ai-url'),
@@ -2806,6 +2830,7 @@ async function loadAndRenderSystemSettings() {
         const response = await fetch('/settings');
         const settingsData = await response.json();
         
+        if (elements.settingApiBase) elements.settingApiBase.value = localStorage.getItem('KICKRSS_API_BASE') || '';
         if (elements.settingFetchInterval) elements.settingFetchInterval.value = settingsData.fetch_interval_minutes;
         if (elements.settingMinTextChars) elements.settingMinTextChars.value = settingsData.min_text_chars;
         if (elements.settingPromoteThreshold) elements.settingPromoteThreshold.value = settingsData.promote_threshold;
@@ -2840,6 +2865,16 @@ async function saveSystemSettings(e) {
     
     if (elements.systemSettingsForm && !elements.systemSettingsForm.reportValidity()) {
         return;
+    }
+    
+    if (elements.settingApiBase) {
+        const apiBase = elements.settingApiBase.value.trim();
+        if (apiBase) {
+            const cleanApiBase = apiBase.replace(/\/+$/, '');
+            localStorage.setItem('KICKRSS_API_BASE', cleanApiBase);
+        } else {
+            localStorage.removeItem('KICKRSS_API_BASE');
+        }
     }
     
     const payload = {
