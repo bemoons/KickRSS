@@ -2820,19 +2820,19 @@ body.light-theme .bar-icon-btn:hover {
 
 /* Attention Levels Specific Active Styling */
 .bar-icon-btn.glance.active {
-    color: #3b82f6 !important; /* Blue */
-    background-color: rgba(59, 130, 246, 0.1) !important;
-    border-color: rgba(59, 130, 246, 0.15) !important;
+   color: #475569 !important; /* Grey - matches title bar */
+   background-color: rgba(71, 85, 105, 0.1) !important;
+   border-color: rgba(71, 85, 105, 0.15) !important;
 }
 .bar-icon-btn.skim.active {
-    color: #f59e0b !important; /* Orange */
-    background-color: rgba(245, 158, 11, 0.1) !important;
-    border-color: rgba(245, 158, 11, 0.15) !important;
+   color: #e2e8f0 !important; /* Light grey - matches title bar */
+   background-color: rgba(226, 232, 240, 0.05) !important;
+   border-color: rgba(226, 232, 240, 0.15) !important;
 }
 .bar-icon-btn.read.active {
-    color: #8b5cf6 !important; /* Purple */
-    background-color: rgba(139, 92, 246, 0.1) !important;
-    border-color: rgba(139, 92, 246, 0.15) !important;
+   color: #f59e0b !important; /* Amber - matches title bar */
+   background-color: rgba(245, 158, 11, 0.08) !important;
+   border-color: rgba(245, 158, 11, 0.2) !important;
 }
 
 /* Starred utility status */
