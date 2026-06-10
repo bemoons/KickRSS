@@ -2825,9 +2825,9 @@ body.light-theme .bar-icon-btn:hover {
    border-color: rgba(71, 85, 105, 0.15) !important;
 }
 .bar-icon-btn.skim.active {
-   color: #e2e8f0 !important; /* Light grey - matches title bar */
-   background-color: rgba(226, 232, 240, 0.05) !important;
-   border-color: rgba(226, 232, 240, 0.15) !important;
+  color: #3b82f6 !important; /* Blue - visible on both themes */
+  background-color: rgba(59, 130, 246, 0.1) !important;
+  border-color: rgba(59, 130, 246, 0.15) !important;
 }
 .bar-icon-btn.read.active {
    color: #f59e0b !important; /* Amber - matches title bar */
