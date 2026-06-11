@@ -284,7 +284,10 @@
                     <div class="chat-header">
                         <div class="chat-header-top">
                             <h3>💬 AI 追问对话</h3>
-                            <button id="close-chat-drawer-btn" class="close-drawer-btn" title="关闭 AI 对话">&times;</button>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <button id="export-chat-btn" style="background: rgba(255,255,255,0.08); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px; padding: 2px 8px; font-size: 11px; cursor: pointer; transition: background 0.2s;" title="导出阅读笔记 (含摘要与问答)">📥 导出笔记</button>
+                                <button id="close-chat-drawer-btn" class="close-drawer-btn" style="margin-left: 0;" title="关闭 AI 对话">&times;</button>
+                            </div>
                         </div>
                         <span class="chat-desc">围绕本文内容进行自由追问</span>
                     </div>

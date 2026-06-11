@@ -94,6 +94,7 @@ const elements = {
     chatInputForm: document.getElementById('chat-input-form'),
     chatInputField: document.getElementById('chat-input-field'),
     chatSendBtn: document.getElementById('chat-send-btn'),
+    exportChatBtn: document.getElementById('export-chat-btn'),
     
     // Footer Buttons
     refreshAllBtn: document.getElementById('refresh-all-btn'),
@@ -493,6 +494,9 @@ function initEventListeners() {
     if (elements.chatInputForm) {
         elements.chatInputForm.addEventListener('submit', handleChatSubmit);
     }
+    if (elements.exportChatBtn) {
+        elements.exportChatBtn.addEventListener('click', exportReadingNotes);
+    }
     
     // Chat Message Delete (Event Delegation)
     if (elements.chatHistory) {
@@ -611,6 +615,18 @@ async function loadFeeds() {
         let totalUnread = 0;
         feeds.forEach(f => totalUnread += f.unread_count || 0);
         elements.globalUnreadCount.textContent = totalUnread;
+
+        // Update browser tab title
+        document.title = totalUnread > 0 ? `(${totalUnread}) KickRSS` : "KickRSS — AI RSS Reader";
+
+        // Update PWA desktop/homescreen badge
+        if ('setAppBadge' in navigator) {
+            if (totalUnread > 0) {
+                navigator.setAppBadge(totalUnread).catch(err => console.error("Error setting app badge:", err));
+            } else {
+                navigator.clearAppBadge().catch(err => console.error("Error clearing app badge:", err));
+            }
+        }
         
         renderFeedsTree();
         
@@ -2854,8 +2870,90 @@ async function loadAndRenderManageFeeds() {
     }
 }
 
-function exportOpml() {
-    window.location.href = '/export/opml';
+async function exportOpml() {
+    try {
+        const response = await fetch('/export/opml');
+        if (!response.ok) throw new Error('Failed to export OPML');
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'subscriptions.opml';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    } catch (err) {
+        console.error('Export failed:', err);
+        alert('导出失败，请重试');
+    }
+}
+
+async function exportReadingNotes() {
+    if (!state.currentOpenEntry) {
+        alert('当前没有打开的文章');
+        return;
+    }
+    
+    const entry = state.currentOpenEntry;
+    const entryId = entry.id;
+    
+    try {
+        // Fetch chat history
+        const res = await fetch(`/entries/${entryId}/chat`);
+        if (!res.ok) throw new Error("Failed to fetch chat history");
+        const history = await res.json();
+        
+        // Fetch summary if any
+        let summaryContent = '';
+        let clickbaitNote = '';
+        
+        const sumRes = await fetch(`/entries/${entryId}/summary`);
+        if (sumRes.ok) {
+            const sumData = await sumRes.json();
+            summaryContent = sumData.summary || '';
+            clickbaitNote = sumData.clickbait_note || '';
+        }
+        
+        // Format as Markdown
+        let md = `# 阅读笔记: ${entry.title}\n\n`;
+        md += `- **原文链接**: ${entry.url || '无'}\n`;
+        md += `- **导出时间**: ${new Date().toLocaleString()}\n\n`;
+        
+        if (summaryContent && summaryContent.trim() !== '') {
+            md += `## ✨ AI 智能总结\n\n${summaryContent}\n\n`;
+        }
+        
+        if (clickbaitNote && clickbaitNote.trim() !== '') {
+            md += `> [!WARNING] 【标题警告】\n> ${clickbaitNote}\n\n`;
+        }
+        
+        if (history && history.length > 0) {
+            md += `## 💬 AI 追问对话记录\n\n`;
+            history.forEach(msg => {
+                const roleName = msg.role === 'user' ? '👤 我' : '🤖 AI';
+                md += `### ${roleName}\n${msg.content}\n\n`;
+            });
+        } else {
+            md += `*(暂无 AI 对话记录)*\n`;
+        }
+        
+        // Create Blob and trigger download
+        const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const safeTitle = entry.title.replace(/[\\/:*?"<>|]/g, '_').substring(0, 50);
+        a.download = `阅读笔记_${safeTitle}.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+    } catch (err) {
+        console.error("Failed to export reading notes:", err);
+        alert('导出阅读笔记失败，请重试');
+    }
 }
 
 function switchManageModalTab(tab) {
