@@ -947,3 +947,8 @@ def get_notes_entries_count(conn: sqlite3.Connection) -> Dict[str, int]:
     total = cursor.fetchone()[0]
     return {"total_count": total}
 
+def delete_entry_chat_history(conn: sqlite3.Connection, entry_id: int) -> bool:
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM chat_messages WHERE entry_id = ?", (entry_id,))
+    return cursor.rowcount > 0
+

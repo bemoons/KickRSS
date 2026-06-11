@@ -237,3 +237,9 @@ def get_notes_entries(
 def get_notes_count():
     with db.get_db() as conn:
         return crud.get_notes_entries_count(conn)
+
+@router.delete("/entries/{entry_id}/chat")
+def delete_entry_chat(entry_id: int):
+    with db.get_db() as conn:
+        crud.delete_entry_chat_history(conn, entry_id)
+        return {"ok": True}

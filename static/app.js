@@ -100,6 +100,8 @@ const elements = {
     notesCount: document.getElementById('notes-count'),
     btnSelectAllNotes: document.getElementById('select-all-notes-btn'),
     btnBatchExportNotes: document.getElementById('batch-export-notes-btn'),
+    clearChatBtn: document.getElementById('clear-chat-btn'),
+    btnRequestBadgePermission: document.getElementById('btn-request-badge-permission'),
     
     // Footer Buttons
     refreshAllBtn: document.getElementById('refresh-all-btn'),
@@ -342,6 +344,95 @@ function initEventListeners() {
     }
     if (elements.btnBatchExportNotes) {
         elements.btnBatchExportNotes.addEventListener('click', () => exportSelectedNotes());
+    }
+    
+    if (elements.clearChatBtn) {
+        elements.clearChatBtn.addEventListener('click', async () => {
+            if (!state.currentOpenEntry) return;
+            const entryId = state.currentOpenEntry.id;
+            if (!confirm('确定要彻底删除该文章的所有 AI 对话笔记吗？此操作无法恢复。')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/entries/${entryId}/chat`, { method: 'DELETE' });
+                if (response.ok) {
+                    alert('笔记已成功删除');
+                    reloadChatHistory(entryId);
+                    
+                    if (state.activeView === 'notes') {
+                        const card = elements.entriesList.querySelector(`.entry-card[data-id="${entryId}"]`);
+                        if (card) {
+                            card.style.transition = "opacity 0.2s ease, max-height 0.2s ease";
+                            card.style.opacity = "0";
+                            setTimeout(() => {
+                                card.remove();
+                                updateEntriesCountLabel();
+                                if (elements.entriesList.querySelectorAll('.entry-card').length === 0) {
+                                    elements.entriesList.innerHTML = `
+                                        <div class="empty-state">
+                                            <span class="empty-icon">☕</span>
+                                            <h3>没有找到文章</h3>
+                                            <p>该分类下目前没有符合筛选条件的文章。</p>
+                                        </div>
+                                    `;
+                                }
+                            }, 200);
+                        }
+                    }
+                    
+                    loadNotesCount();
+                } else {
+                    alert('删除失败，请重试');
+                }
+            } catch (err) {
+                console.error("Failed to clear chat notes:", err);
+                alert('删除失败，请重试');
+            }
+        });
+    }
+
+    if (elements.btnRequestBadgePermission) {
+        if ('Notification' in window) {
+            if (Notification.permission === 'granted') {
+                elements.btnRequestBadgePermission.textContent = '✅ 已开启角标';
+                elements.btnRequestBadgePermission.disabled = true;
+                elements.btnRequestBadgePermission.style.opacity = '0.7';
+            } else if (Notification.permission === 'denied') {
+                elements.btnRequestBadgePermission.textContent = '❌ 已拒绝权限';
+                elements.btnRequestBadgePermission.disabled = true;
+                elements.btnRequestBadgePermission.style.opacity = '0.7';
+            }
+        } else {
+            elements.btnRequestBadgePermission.textContent = '⚠️ 浏览器不支持角标';
+            elements.btnRequestBadgePermission.disabled = true;
+            elements.btnRequestBadgePermission.style.opacity = '0.7';
+        }
+        
+        elements.btnRequestBadgePermission.addEventListener('click', async () => {
+            if (!('Notification' in window)) {
+                alert('您的浏览器或运行环境不支持 Web Notification 权限申请。如果是 iOS，请先添加此页面到主屏幕 (PWA)。');
+                return;
+            }
+            try {
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    elements.btnRequestBadgePermission.textContent = '✅ 已开启角标';
+                    elements.btnRequestBadgePermission.disabled = true;
+                    elements.btnRequestBadgePermission.style.opacity = '0.7';
+                    alert('推送与角标权限已成功开启！');
+                    loadFeeds();
+                } else if (permission === 'denied') {
+                    elements.btnRequestBadgePermission.textContent = '❌ 已拒绝权限';
+                    elements.btnRequestBadgePermission.disabled = true;
+                    elements.btnRequestBadgePermission.style.opacity = '0.7';
+                    alert('权限申请被拒绝，如需开启请在系统设置中允许该 PWA 应用的通知权限。');
+                }
+            } catch (err) {
+                console.error("Failed to request badge permission:", err);
+                alert("申请权限失败: " + err.message);
+            }
+        });
     }
     
     // Theme Switcher
@@ -1064,6 +1155,23 @@ async function loadCategoryEntries(catId, appendMode = false) {
     }
 }
 
+function updateEntriesCountLabel() {
+    if (!elements.entriesCountLabel) return;
+    
+    const totalCards = elements.entriesList.querySelectorAll('.entry-card').length;
+    const unreadCount = elements.entriesList.querySelectorAll('.entry-card.unread').length;
+    
+    if (state.activeView === 'notes') {
+        elements.entriesCountLabel.textContent = `${totalCards} 篇笔记`;
+    } else if (state.activeView === 'starred') {
+        elements.entriesCountLabel.textContent = `${totalCards} 篇收藏`;
+    } else if (state.activeView === 'search') {
+        elements.entriesCountLabel.textContent = `${totalCards} 篇结果`;
+    } else {
+        elements.entriesCountLabel.textContent = `${unreadCount} 篇未读`;
+    }
+}
+
 function refreshEntriesList(appendMode = false, newAddedData = []) {
     toggleNotesHeaderControls(state.activeView === 'notes');
     
@@ -1080,7 +1188,7 @@ function refreshEntriesList(appendMode = false, newAddedData = []) {
     
     // Client-side filtering if activeView is global unread (in case we loaded all categories and want to toggle)
     let filtered = state.entries;
-    if (state.filterUnreadOnly && state.activeView !== 'search' && state.activeView !== 'starred') {
+    if (state.filterUnreadOnly && state.activeView !== 'search' && state.activeView !== 'starred' && state.activeView !== 'notes') {
         filtered = state.entries.filter(e => e.is_read === 0);
     }
     
@@ -1094,8 +1202,6 @@ function refreshEntriesList(appendMode = false, newAddedData = []) {
         }
     }
     
-    elements.entriesCountLabel.textContent = `${filtered.length} 篇文章`;
-    
     if (filtered.length === 0) {
         elements.entriesList.innerHTML = `
             <div class="empty-state">
@@ -1104,6 +1210,7 @@ function refreshEntriesList(appendMode = false, newAddedData = []) {
                 <p>该分类下目前没有符合筛选条件的文章。</p>
             </div>
         `;
+        updateEntriesCountLabel();
         return;
     }
     
@@ -1111,8 +1218,8 @@ function refreshEntriesList(appendMode = false, newAddedData = []) {
     const entriesToRender = appendMode ? newAddedData : filtered;
     
     entriesToRender.forEach(entry => {
-        // Skip read entries if filterUnreadOnly is enabled and not in search/starred view
-        if (appendMode && state.filterUnreadOnly && state.activeView !== 'search' && state.activeView !== 'starred' && entry.is_read === 1) {
+        // Skip read entries if filterUnreadOnly is enabled and not in search/starred/notes view
+        if (appendMode && state.filterUnreadOnly && state.activeView !== 'search' && state.activeView !== 'starred' && state.activeView !== 'notes' && entry.is_read === 1) {
             return;
         }
         
@@ -1210,9 +1317,8 @@ function refreshEntriesList(appendMode = false, newAddedData = []) {
                               card.style.opacity = "0";
                               setTimeout(() => {
                                   card.remove();
-                                  const remaining = elements.entriesList.querySelectorAll('.entry-card').length;
-                                  elements.entriesCountLabel.textContent = `${remaining} 篇文章`;
-                                  if (remaining === 0) {
+                                  updateEntriesCountLabel();
+                                  if (elements.entriesList.querySelectorAll('.entry-card').length === 0) {
                                       elements.entriesList.innerHTML = `
                                           <div class="empty-state">
                                               <span class="empty-icon">☕</span>
@@ -1279,6 +1385,7 @@ function refreshEntriesList(appendMode = false, newAddedData = []) {
     if (state.activeView === 'notes') {
         updateBatchNotesButtonsUI();
     }
+    updateEntriesCountLabel();
 }
 
 async function loadMoreEntries() {
@@ -1500,11 +1607,7 @@ async function markEntryAsRead(entryId) {
                     }
                 }
                 
-                // Update top list count if filterUnreadOnly is active
-                if (state.filterUnreadOnly) {
-                    const unreadCount = elements.entriesList.querySelectorAll('.entry-card.unread').length;
-                    elements.entriesCountLabel.textContent = `${unreadCount} 篇文章`;
-                }
+                updateEntriesCountLabel();
                 
                 // Reload counts
                 loadFeeds();
@@ -1691,11 +1794,7 @@ async function toggleCurrentEntryReadStatus() {
                 }
             }
             
-            // Update top list count if filterUnreadOnly is active
-            if (state.filterUnreadOnly) {
-                const unreadCount = elements.entriesList.querySelectorAll('.entry-card.unread').length;
-                elements.entriesCountLabel.textContent = `${unreadCount} 篇文章`;
-            }
+            updateEntriesCountLabel();
             
             loadFeeds();
         }
@@ -1755,9 +1854,8 @@ async function toggleCurrentEntryStarStatus() {
                             card.style.opacity = "0";
                             setTimeout(() => {
                                 card.remove();
-                                const remaining = elements.entriesList.querySelectorAll('.entry-card').length;
-                                elements.entriesCountLabel.textContent = `${remaining} 篇文章`;
-                                if (remaining === 0) {
+                                updateEntriesCountLabel();
+                                if (elements.entriesList.querySelectorAll('.entry-card').length === 0) {
                                     elements.entriesList.innerHTML = `
                                         <div class="empty-state">
                                             <span class="empty-icon">☕</span>
@@ -1923,11 +2021,13 @@ async function reloadChatHistory(entryId) {
         if (!state.currentOpenEntry || state.currentOpenEntry.id !== entryId) return;
         
         if (history && history.length > 0) {
+            if (elements.clearChatBtn) elements.clearChatBtn.style.display = 'inline-block';
             elements.chatHistory.innerHTML = ''; // Clear default prompt
             history.forEach(msg => {
                 appendChatBubble(msg.role, msg.content, msg.id, msg.created_at);
             });
         } else {
+            if (elements.clearChatBtn) elements.clearChatBtn.style.display = 'none';
             elements.chatHistory.innerHTML = `
                 <div class="system-message">
                     您可以针对正文或摘要内容，向 AI 提出任何疑问或进行深度拓展探讨。
@@ -4444,14 +4544,13 @@ function initPwaGestures() {
                 setTimeout(async () => {
                     await markSingleEntryAsRead(entryId);
                     
-                    if (state.filterUnreadOnly && state.activeView !== 'search' && state.activeView !== 'starred') {
+                    if (state.filterUnreadOnly && state.activeView !== 'search' && state.activeView !== 'starred' && state.activeView !== 'notes') {
                         activeSwipeCard.classList.add('collapsed');
                         setTimeout(() => {
                             activeSwipeCard.remove();
                             // Update count label
-                            const remaining = elements.entriesList.querySelectorAll('.entry-card').length;
-                            elements.entriesCountLabel.textContent = `${remaining} 篇文章`;
-                            if (remaining === 0) {
+                            updateEntriesCountLabel();
+                            if (elements.entriesList.querySelectorAll('.entry-card').length === 0) {
                                 elements.entriesList.innerHTML = `
                                     <div class="empty-state">
                                         <span class="empty-icon">☕</span>
@@ -4472,6 +4571,7 @@ function initPwaGestures() {
                             cardContent.style.transition = 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
                             cardContent.style.transform = 'translateX(0)';
                         }
+                        updateEntriesCountLabel();
                     }
                 }, 200);
             } else {
