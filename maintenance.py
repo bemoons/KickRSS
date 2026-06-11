@@ -247,8 +247,8 @@ def build_user_interest_profile():
     {{"topic": "主题名称", "description": "一句话描述"}},
     ...
   ],
-  "attention_guide": "一段自然语言，50-120字，概括用户的整体阅读倾向，供分类器参考。格式示例：'用户高度关注XX和XX方向，尤其是涉及XX的内容应标为read；对XX and XX类内容兴趣较低，可标为glance。'",
-  "concentration_note": "如果 high_interest 中超过半数主题属于同一领域，输出一句温和的提醒（20-40字），否则设为 null"
+  "attention_guide": "一段自然语言，50-120字，概括用户的整体阅读倾向，供分类器参考。格式示例：'用户高度关注XX and XX方向，尤其是涉及XX的内容应标为read；对XX and XX类内容兴趣较低，可标为glance。'",
+  "concentration_note": "如果 high_interest 中超过半数主题属于同一领域，输出一句带黑色幽默、毒舌、戏谑又一针见血的调侃，无情揭露用户偏科的信息茧房（30-60字），语气要傲娇或犀利，否则设为 null"
 }}
 
 要求：

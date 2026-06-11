@@ -47,7 +47,9 @@ const state = {
     isLoadingMore: false,
     
     // Reading profile state
-    interestProfileEnabled: false
+    interestProfileEnabled: false,
+    profileTrendView: 'week', // 'week' or 'month'
+    interestProfileData: null
 };
 
 let currentEngagement = null;
@@ -187,7 +189,15 @@ const elements = {
     profileHeatmapContainer: document.getElementById('profile-heatmap-container'),
     profileInsightBox: document.getElementById('profile-insight-box'),
     profileInsightText: document.getElementById('profile-insight-text'),
-    settingInterestProfileEnabled: document.getElementById('setting-interest-profile-enabled')
+    settingInterestProfileEnabled: document.getElementById('setting-interest-profile-enabled'),
+    profileToggleWeek: document.getElementById('profile-toggle-week'),
+    profileToggleMonth: document.getElementById('profile-toggle-month'),
+    profileDetailTrendTitle: document.getElementById('profile-detail-trend-title'),
+    profileTabWeekContent: document.getElementById('profile-tab-week-content'),
+    profileTabMonthContent: document.getElementById('profile-tab-month-content'),
+    profileActivityHeatmap: document.getElementById('profile-activity-heatmap'),
+    profileHabitInsightText: document.getElementById('profile-habit-insight-text'),
+    profileCategoryDistributionList: document.getElementById('profile-category-distribution-list')
 };
 
 // ----------------------------------------------------
@@ -718,6 +728,48 @@ function initEventListeners() {
                 elements.profileTagCloud.querySelectorAll('.profile-tag').forEach(el => {
                     el.style.outline = 'none';
                 });
+            }
+        });
+    }
+    if (elements.profileToggleWeek) {
+        elements.profileToggleWeek.addEventListener('click', () => {
+            if (state.profileTrendView === 'week') return;
+            state.profileTrendView = 'week';
+            elements.profileToggleWeek.classList.add('active');
+            elements.profileToggleWeek.style.background = 'var(--accent-indigo, #6366f1)';
+            elements.profileToggleWeek.style.color = '#fff';
+            elements.profileToggleMonth.classList.remove('active');
+            elements.profileToggleMonth.style.background = 'transparent';
+            elements.profileToggleMonth.style.color = 'var(--text-muted)';
+            
+            if (elements.profileTabWeekContent) elements.profileTabWeekContent.classList.remove('hidden');
+            if (elements.profileTabMonthContent) elements.profileTabMonthContent.classList.add('hidden');
+            
+            if (state.interestProfileData) {
+                renderProfileWeeklyActivity(state.interestProfileData.activity_timestamps);
+            }
+        });
+    }
+    if (elements.profileToggleMonth) {
+        elements.profileToggleMonth.addEventListener('click', () => {
+            if (state.profileTrendView === 'month') return;
+            state.profileTrendView = 'month';
+            elements.profileToggleMonth.classList.add('active');
+            elements.profileToggleMonth.style.background = 'var(--accent-indigo, #6366f1)';
+            elements.profileToggleMonth.style.color = '#fff';
+            elements.profileToggleWeek.classList.remove('active');
+            elements.profileToggleWeek.style.background = 'transparent';
+            elements.profileToggleWeek.style.color = 'var(--text-muted)';
+            
+            if (elements.profileTabMonthContent) elements.profileTabMonthContent.classList.remove('hidden');
+            if (elements.profileTabWeekContent) elements.profileTabWeekContent.classList.add('hidden');
+            
+            if (state.interestProfileData && state.interestProfileData.topics) {
+                renderProfileHeatmap(state.interestProfileData.topics);
+                renderProfileCategoryDistribution(state.interestProfileData.category_distribution);
+                if (elements.profileDetailPanel && !elements.profileDetailPanel.classList.contains('hidden')) {
+                    showTopicDetail(elements.profileDetailTitle.textContent);
+                }
             }
         });
     }
@@ -4790,6 +4842,7 @@ async function showProfileModal() {
             throw new Error("Failed to fetch profile");
         }
         const data = await response.json();
+        state.interestProfileData = data;
         
         if (data.status === 'disabled') {
             elements.profileStatusView.classList.remove('hidden');
@@ -4814,13 +4867,32 @@ async function showProfileModal() {
         elements.profileStatHigh.textContent = data.high_engagement || 0;
         elements.profileStatLow.textContent = data.low_engagement || 0;
         
+        // Reset tabs to Monthly View by default
+        state.profileTrendView = 'month';
+        if (elements.profileToggleMonth) {
+            elements.profileToggleMonth.classList.add('active');
+            elements.profileToggleMonth.style.background = 'var(--accent-indigo, #6366f1)';
+            elements.profileToggleMonth.style.color = '#fff';
+        }
+        if (elements.profileToggleWeek) {
+            elements.profileToggleWeek.classList.remove('active');
+            elements.profileToggleWeek.style.background = 'transparent';
+            elements.profileToggleWeek.style.color = 'var(--text-muted)';
+        }
+        if (elements.profileTabMonthContent) elements.profileTabMonthContent.classList.remove('hidden');
+        if (elements.profileTabWeekContent) elements.profileTabWeekContent.classList.add('hidden');
+        
+        renderProfileWeeklyActivity(data.activity_timestamps || []);
         renderProfileTagCloud(data.topics || { high_interest: [], low_interest: [] });
-        renderProfileHeatmap(data.topics || { high_interest: [], low_interest: [] });
+        if (data.topics) {
+            renderProfileHeatmap(data.topics);
+            renderProfileCategoryDistribution(data.category_distribution);
+        }
         
         if (data.topics && data.topics.concentration_note) {
             elements.profileInsightText.textContent = data.topics.concentration_note;
         } else {
-            elements.profileInsightText.textContent = "这是基于你近 30 天的阅读行为自动生成的兴趣画像。如果你发现某些你认为重要的主题出现在小字标签中，也许值得在下次刷新时多留意它们。";
+            elements.profileInsightText.textContent = "这是 AI 默默窥探你 30 天后的铁证。如果有些字小到要拿放大镜看，别怀疑，那就是你嘴上高喊‘热爱’却连点都没点过的叶公好龙型兴趣。下次跟人假装博学之前，建议先来这里‘雨露均沾’一下，免得你的信息茧房厚到能防弹。";
         }
         
         // Hide detail panel initially
@@ -4942,16 +5014,19 @@ async function showTopicDetail(topicName) {
         
         // Render Trend Chart
         elements.profileDetailTrend.innerHTML = '';
-        const maxVal = Math.max(...data.weekly_trend, 1);
-        data.weekly_trend.forEach((count, i) => {
+        if (elements.profileDetailTrendTitle) elements.profileDetailTrendTitle.textContent = '近4周阅读活跃度趋势';
+        const trendToShow = data.weekly_trend.slice(8); // show last 4 weeks (indices 8, 9, 10, 11)
+        const maxVal = Math.max(...trendToShow, 1);
+        const colLabels = ['4周前', '3周前', '2周前', '本周'];
+        trendToShow.forEach((count, i) => {
             const barHeightPct = (count / maxVal) * 100;
             const bar = document.createElement('div');
-            bar.style.width = '6%';
+            bar.style.width = '20%';
             bar.style.height = `${Math.max(barHeightPct, 5)}%`;
             bar.style.backgroundColor = 'var(--accent-indigo, #6366f1)';
-            bar.style.borderRadius = '2px 2px 0 0';
+            bar.style.borderRadius = '3px 3px 0 0';
             bar.style.opacity = count > 0 ? (0.3 + (count / maxVal) * 0.7) : 0.1;
-            bar.title = `第${i+1}周: ${count} 篇`;
+            bar.title = `${colLabels[i]}: ${count} 篇`;
             elements.profileDetailTrend.appendChild(bar);
         });
         
@@ -5043,6 +5118,224 @@ async function showTopicDetail(topicName) {
     }
 }
 
+function renderProfileWeeklyActivity(timestamps) {
+    if (!elements.profileActivityHeatmap) return;
+    elements.profileActivityHeatmap.innerHTML = '';
+    
+    // Matrix of 4 periods (rows) x 7 days (cols)
+    // Rows: 0=Morning(6-12), 1=Afternoon(12-18), 2=Evening(18-24), 3=Night(0-6)
+    // Cols: 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
+    const matrix = Array.from({ length: 4 }, () => Array(7).fill(0));
+    
+    // Populate matrix from local timestamps
+    timestamps.forEach(ts => {
+        try {
+            const date = new Date(ts);
+            if (isNaN(date.getTime())) return;
+            
+            let day = date.getDay() - 1;
+            if (day === -1) day = 6;
+            
+            const hour = date.getHours();
+            let period = 3; // Night (0-6)
+            if (hour >= 6 && hour < 12) period = 0; // Morning (6-12)
+            else if (hour >= 12 && hour < 18) period = 1; // Afternoon (12-18)
+            else if (hour >= 18 && hour < 24) period = 2; // Evening (18-24)
+            
+            matrix[period][day]++;
+        } catch (e) {
+            console.error("Error parsing timestamp:", ts, e);
+        }
+    });
+    
+    // Header Row
+    const headerRow = document.createElement('div');
+    headerRow.style.display = 'flex';
+    headerRow.style.alignItems = 'center';
+    headerRow.style.gap = '4px';
+    headerRow.style.fontSize = '9px';
+    headerRow.style.color = 'var(--text-muted)';
+    headerRow.style.fontWeight = '600';
+    headerRow.style.paddingBottom = '4px';
+    headerRow.style.borderBottom = '1px solid var(--border-color)';
+    
+    const timeColHeader = document.createElement('div');
+    timeColHeader.style.width = '120px';
+    timeColHeader.textContent = '阅读时段';
+    headerRow.appendChild(timeColHeader);
+    
+    const daysContainerHeader = document.createElement('div');
+    daysContainerHeader.style.display = 'flex';
+    daysContainerHeader.style.gap = '4px';
+    daysContainerHeader.style.flex = '1';
+    daysContainerHeader.style.justifyContent = 'space-between';
+    
+    const dayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    dayLabels.forEach(label => {
+        const dLabel = document.createElement('div');
+        dLabel.style.width = '35px';
+        dLabel.style.textAlign = 'center';
+        dLabel.textContent = label;
+        daysContainerHeader.appendChild(dLabel);
+    });
+    headerRow.appendChild(daysContainerHeader);
+    elements.profileActivityHeatmap.appendChild(headerRow);
+    
+    const periodLabels = [
+        '🌅 清晨/上午 (06-12)',
+        '☀️ 中午/下午 (12-18)',
+        '🌙 傍晚/晚上 (18-24)',
+        '💤 深夜/凌晨 (00-06)'
+    ];
+    
+    let maxVal = 0;
+    for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 7; c++) {
+            if (matrix[r][c] > maxVal) maxVal = matrix[r][c];
+        }
+    }
+    if (maxVal === 0) maxVal = 1;
+    
+    const periodSums = [0, 0, 0, 0];
+    for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 7; c++) {
+            periodSums[r] += matrix[r][c];
+        }
+    }
+    
+    for (let r = 0; r < 4; r++) {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.gap = '4px';
+        row.style.padding = '4px 0';
+        row.style.borderBottom = '1px solid rgba(255, 255, 255, 0.02)';
+        
+        const timeLabel = document.createElement('div');
+        timeLabel.style.width = '120px';
+        timeLabel.style.fontSize = '11px';
+        timeLabel.style.fontWeight = '500';
+        timeLabel.style.color = 'var(--text-secondary)';
+        timeLabel.textContent = periodLabels[r];
+        row.appendChild(timeLabel);
+        
+        const colsContainer = document.createElement('div');
+        colsContainer.style.display = 'flex';
+        colsContainer.style.gap = '4px';
+        colsContainer.style.flex = '1';
+        colsContainer.style.justifyContent = 'space-between';
+        
+        for (let c = 0; c < 7; c++) {
+            const count = matrix[r][c];
+            const cell = document.createElement('div');
+            cell.style.width = '35px';
+            cell.style.height = '24px';
+            cell.style.borderRadius = '3px';
+            
+            if (count === 0) {
+                cell.style.backgroundColor = 'rgba(255, 255, 255, 0.02)';
+                cell.style.border = '1px solid rgba(255, 255, 255, 0.03)';
+            } else {
+                const ratio = count / maxVal;
+                cell.style.backgroundColor = 'var(--accent-indigo, #6366f1)';
+                cell.style.opacity = 0.2 + ratio * 0.8;
+            }
+            
+            cell.title = `${dayLabels[c]} ${periodLabels[r].split(' ')[0]}\n阅读了 ${count} 篇文章`;
+            colsContainer.appendChild(cell);
+        }
+        row.appendChild(colsContainer);
+        elements.profileActivityHeatmap.appendChild(row);
+    }
+    
+    let peakPeriod = 0;
+    let maxPeriodVal = 0;
+    for (let r = 0; r < 4; r++) {
+        if (periodSums[r] > maxPeriodVal) {
+            maxPeriodVal = periodSums[r];
+            peakPeriod = r;
+        }
+    }
+    
+    let habitText = '';
+    if (timestamps.length === 0) {
+        habitText = '暂无足够阅读活动记录。多看几篇新闻，你的每日阅读习惯就会出现在这里哦！';
+    } else {
+        if (peakPeriod === 3) {
+            habitText = '仙风道骨！统计发现你最常在【深夜/凌晨】看新闻。熬最深的夜，吃最烫的信息瓜，你是名副其实的“修仙党”——注意护肝哦！';
+        } else if (peakPeriod === 0) {
+            habitText = '晨光熹微，元气满满！你最习惯在【清晨/上午】开启阅读。用天下大事唤醒沉睡的细胞，自律程度拉满，今天也是充实的一天！';
+        } else if (peakPeriod === 1) {
+            habitText = '咖啡续命，摸鱼大师！你爱在【中午/下午】工作间隙刷新闻。这叫劳逸结合、科学放松，我们懂的（主编暗示：在偷偷偷懒吧？）。';
+        } else if (peakPeriod === 2) {
+            habitText = '日落西山，静享时光。你最钟爱在【傍晚/晚上】静心阅读。洗净一天的喧嚣与疲惫，慢慢品读这个世界，阅读体验极佳。';
+        } else {
+            habitText = '规律得像个机器人！你的阅读分布非常均匀，成功避开了所有极端的摸鱼或修仙时段。佩服佩服！';
+        }
+    }
+    
+    if (elements.profileHabitInsightText) {
+        elements.profileHabitInsightText.textContent = habitText;
+    }
+}
+
+function renderProfileCategoryDistribution(categoryDistribution) {
+    if (!elements.profileCategoryDistributionList) return;
+    elements.profileCategoryDistributionList.innerHTML = '';
+    
+    if (!categoryDistribution || categoryDistribution.length === 0) {
+        elements.profileCategoryDistributionList.innerHTML = '<div style="color:var(--text-muted); font-size:12px; text-align:center;">暂无分类阅读统计</div>';
+        return;
+    }
+    
+    const totalCount = categoryDistribution.reduce((acc, c) => acc + c.count, 0) || 1;
+    
+    categoryDistribution.forEach(cat => {
+        const pct = Math.round((cat.count / totalCount) * 100);
+        
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.flexDirection = 'column';
+        row.style.gap = '4px';
+        
+        const labelRow = document.createElement('div');
+        labelRow.style.display = 'flex';
+        labelRow.style.justifyContent = 'space-between';
+        labelRow.style.fontSize = '11px';
+        labelRow.style.fontWeight = '500';
+        labelRow.style.color = 'var(--text-secondary)';
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = cat.name;
+        
+        const countSpan = document.createElement('span');
+        countSpan.textContent = `${cat.count} 篇 (${pct}%)`;
+        countSpan.style.color = 'var(--text-muted)';
+        
+        labelRow.appendChild(nameSpan);
+        labelRow.appendChild(countSpan);
+        
+        const barContainer = document.createElement('div');
+        barContainer.style.width = '100%';
+        barContainer.style.height = '6px';
+        barContainer.style.background = 'rgba(255, 255, 255, 0.03)';
+        barContainer.style.borderRadius = '3px';
+        barContainer.style.overflow = 'hidden';
+        
+        const fillBar = document.createElement('div');
+        fillBar.style.width = `${pct}%`;
+        fillBar.style.height = '100%';
+        fillBar.style.background = 'var(--accent-indigo, #6366f1)';
+        fillBar.style.borderRadius = '3px';
+        
+        barContainer.appendChild(fillBar);
+        row.appendChild(labelRow);
+        row.appendChild(barContainer);
+        
+        elements.profileCategoryDistributionList.appendChild(row);
+    });
+}
+
 async function renderProfileHeatmap(topics) {
     const high = topics.high_interest || [];
     const low = topics.low_interest || [];
@@ -5091,13 +5384,14 @@ async function renderProfileHeatmap(topics) {
         weeksContainerHeader.style.flex = '1';
         weeksContainerHeader.style.justifyContent = 'space-between';
         
-        for (let w = 1; w <= 12; w++) {
+        const colLabels = ['4周前', '3周前', '2周前', '本周'];
+        colLabels.forEach(label => {
             const wLabel = document.createElement('div');
-            wLabel.style.width = '20px';
+            wLabel.style.width = '45px';
             wLabel.style.textAlign = 'center';
-            wLabel.textContent = `W${w}`;
+            wLabel.textContent = label;
             weeksContainerHeader.appendChild(wLabel);
-        }
+        });
         headerRow.appendChild(weeksContainerHeader);
         elements.profileHeatmapContainer.appendChild(headerRow);
         
@@ -5127,10 +5421,11 @@ async function renderProfileHeatmap(topics) {
             weeksContainer.style.flex = '1';
             weeksContainer.style.justifyContent = 'space-between';
             
-            const maxVal = Math.max(...detail.weekly_trend, 1);
-            detail.weekly_trend.forEach((count, i) => {
+            const trendToShow = detail.weekly_trend.slice(8); // show last 4 weeks (indices 8, 9, 10, 11)
+            const maxVal = Math.max(...trendToShow, 1);
+            trendToShow.forEach((count, i) => {
                 const cell = document.createElement('div');
-                cell.style.width = '20px';
+                cell.style.width = '45px';
                 cell.style.height = '20px';
                 cell.style.borderRadius = '3px';
                 
@@ -5144,7 +5439,7 @@ async function renderProfileHeatmap(topics) {
                 }
                 
                 cell.style.cursor = 'pointer';
-                cell.title = `${detail.topic}\n第${i+1}周: ${count}篇`;
+                cell.title = `${detail.topic}\n${colLabels[i]}: ${count}篇`;
                 
                 weeksContainer.appendChild(cell);
             });
