@@ -935,7 +935,7 @@ def get_notes_entries(
         SELECT id, feed_id, category_id, guid, title, url, author, published_at, fetched_at,
                attention, likely_no_text, fulltext_ready, is_read, read_at, classified_at, is_starred
         FROM entries
-        WHERE id IN (SELECT DISTINCT entry_id FROM chat_messages)
+        WHERE id IN (SELECT DISTINCT entry_id FROM chat_messages WHERE content IS NOT NULL AND trim(content) != '')
         ORDER BY published_at DESC, id DESC
         LIMIT ? OFFSET ?
     """, (limit, offset))
@@ -943,7 +943,7 @@ def get_notes_entries(
 
 def get_notes_entries_count(conn: sqlite3.Connection) -> Dict[str, int]:
     cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(DISTINCT entry_id) FROM chat_messages")
+    cursor.execute("SELECT COUNT(DISTINCT entry_id) FROM chat_messages WHERE content IS NOT NULL AND trim(content) != ''")
     total = cursor.fetchone()[0]
     return {"total_count": total}
 

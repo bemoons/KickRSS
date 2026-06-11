@@ -1489,11 +1489,16 @@ async function selectEntry(entryId) {
     // Load fulltext and AI summary
     loadArticleDetails(entry);
     
-    // Close chat drawer on new entry open
+    // Slide open chat drawer if in Notes view, otherwise close it
     const detailCol = document.getElementById('detail-column');
     const chatSection = document.getElementById('chat-section');
-    if (detailCol) detailCol.classList.remove('chat-open');
-    if (chatSection) chatSection.classList.remove('open');
+    if (state.activeView === 'notes') {
+        if (detailCol) detailCol.classList.add('chat-open');
+        if (chatSection) chatSection.classList.add('open');
+    } else {
+        if (detailCol) detailCol.classList.remove('chat-open');
+        if (chatSection) chatSection.classList.remove('open');
+    }
     
     // Mobile navigation transition
     document.body.classList.add('show-detail');
