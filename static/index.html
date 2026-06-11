@@ -630,8 +630,8 @@
                 <div id="profile-main-content" style="display: flex; flex-direction: column; gap: 15px;">
                     <!-- View Selector Toggle -->
                     <div class="view-toggle" style="display: flex; gap: 8px; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 8px; border: 1px solid var(--border-color);">
-                        <button id="profile-toggle-week" class="toggle-btn" style="flex: 1; font-size: 12px; font-weight: 600; padding: 8px; border: none; background: transparent; color: var(--text-muted); border-radius: 6px; cursor: pointer; transition: all 0.2s;">📅 周视图 (阅读习惯)</button>
-                        <button id="profile-toggle-month" class="toggle-btn active" style="flex: 1; font-size: 12px; font-weight: 600; padding: 8px; border: none; background: var(--accent-indigo, #6366f1); color: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s;">📊 月视图 (内容分布)</button>
+                        <button id="profile-toggle-week" class="toggle-btn" style="flex: 1; font-size: 12px; font-weight: 600; padding: 8px; border: none; background: transparent; color: var(--text-muted); border-radius: 6px; cursor: pointer; transition: all 0.2s;">📅 阅读习惯</button>
+                        <button id="profile-toggle-month" class="toggle-btn active" style="flex: 1; font-size: 12px; font-weight: 600; padding: 8px; border: none; background: var(--accent-indigo, #6366f1); color: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s;">📊 兴趣画像</button>
                     </div>
 
                     <!-- WEEK TAB CONTENT -->
@@ -658,6 +658,13 @@
                         <div id="profile-habit-insight-box" style="border-left: 3px solid var(--accent-indigo, #6366f1); padding: 10px 14px; background: rgba(99, 102, 241, 0.08); border-radius: 0 6px 6px 0; font-size: 12px; line-height: 1.5; color: var(--text-primary); font-weight: 500;">
                             💡 <span id="profile-habit-insight-text">阅读习惯分析中...</span>
                         </div>
+                        <!-- Category Reading Distribution -->
+                        <div>
+                            <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: var(--text-secondary);">📊 分类阅读分布</h4>
+                            <div id="profile-category-distribution-list" style="display: flex; flex-direction: column; gap: 8px; padding: 12px; background: rgba(0,0,0,0.1); border-radius: 8px; border: 1px solid var(--border-color);">
+                                <!-- Dynamically generated list -->
+                            </div>
+                        </div>
                     </div>
 
                     <!-- MONTH TAB CONTENT -->
@@ -677,15 +684,7 @@
                                 <div id="profile-stat-low" style="font-size: 18px; font-weight: 700; color: var(--text-muted);">0</div>
                             </div>
                         </div>
-
-                        <!-- Category Reading Distribution -->
-                        <div>
-                            <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: var(--text-secondary);">📊 分类阅读分布</h4>
-                            <div id="profile-category-distribution-list" style="display: flex; flex-direction: column; gap: 8px; padding: 12px; background: rgba(0,0,0,0.1); border-radius: 8px; border: 1px solid var(--border-color);">
-                                <!-- Dynamically generated list -->
-                            </div>
-                        </div>
-
+                        
                         <!-- Interest Tag Cloud -->
                         <div>
                             <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: var(--text-secondary);">🎯 兴趣标签云 (点击标签查看详情)</h4>

@@ -747,6 +747,7 @@ function initEventListeners() {
             
             if (state.interestProfileData) {
                 renderProfileWeeklyActivity(state.interestProfileData.activity_timestamps);
+                renderProfileCategoryDistribution(state.interestProfileData.category_distribution);
             }
         });
     }
@@ -766,7 +767,6 @@ function initEventListeners() {
             
             if (state.interestProfileData && state.interestProfileData.topics) {
                 renderProfileHeatmap(state.interestProfileData.topics);
-                renderProfileCategoryDistribution(state.interestProfileData.category_distribution);
                 if (elements.profileDetailPanel && !elements.profileDetailPanel.classList.contains('hidden')) {
                     showTopicDetail(elements.profileDetailTitle.textContent);
                 }
