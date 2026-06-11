@@ -124,6 +124,13 @@ CREATE TABLE IF NOT EXISTS user_interests (
     generated_at    TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS token_usage (
+    date              TEXT PRIMARY KEY,
+    prompt_tokens     INTEGER NOT NULL DEFAULT 0,
+    completion_tokens INTEGER NOT NULL DEFAULT 0,
+    total_tokens      INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE INDEX IF NOT EXISTS idx_entries_fetched_at ON entries(fetched_at);
 """
 

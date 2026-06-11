@@ -371,6 +371,50 @@ function initEventListeners() {
     if (elements.settingsSaveBtn) {
         elements.settingsSaveBtn.addEventListener('click', saveSystemSettings);
     }
+    const btnTestLLM = document.getElementById('btn-test-llm');
+    if (btnTestLLM) {
+        btnTestLLM.addEventListener('click', async () => {
+            const apiBaseUrl = document.getElementById('setting-ai-url').value.trim();
+            const apiKey = document.getElementById('setting-ai-key').value.trim();
+            const apiModel = document.getElementById('setting-ai-model').value.trim();
+            
+            const resultSpan = document.getElementById('llm-test-result');
+            resultSpan.textContent = '正在测试连接...';
+            resultSpan.style.color = 'var(--text-muted)';
+            
+            btnTestLLM.disabled = true;
+            
+            try {
+                const startTime = Date.now();
+                const res = await fetch('/settings/test-llm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ai_base_url: apiBaseUrl,
+                        ai_api_key: apiKey,
+                        ai_model: apiModel
+                    })
+                });
+                
+                const data = await res.json();
+                const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+                
+                if (data.success) {
+                    resultSpan.textContent = `连接成功！耗时 ${duration}s，响应: ${data.model_response}`;
+                    resultSpan.style.color = '#10b981';
+                } else {
+                    resultSpan.textContent = `连接失败: ${data.message}`;
+                    resultSpan.style.color = '#ef4444';
+                }
+            } catch (err) {
+                console.error(err);
+                resultSpan.textContent = '网络错误，连接失败。';
+                resultSpan.style.color = '#ef4444';
+            } finally {
+                btnTestLLM.disabled = false;
+            }
+        });
+    }
     if (elements.btnManualMaintenance) {
         elements.btnManualMaintenance.addEventListener('click', triggerManualMaintenance);
     }
@@ -496,6 +540,15 @@ function initEventListeners() {
     if (elements.mobileBackToFeeds) {
         elements.mobileBackToFeeds.addEventListener('click', () => {
             document.body.classList.remove('show-entries');
+            // Auto collapse current feed if it has no more unread entries
+            if (state.selectedFeedId !== null) {
+                const feed = state.feeds.find(f => f.id === state.selectedFeedId);
+                if (feed && (!feed.unread_count || feed.unread_count === 0)) {
+                    state.selectedFeedId = null;
+                    state.selectedCategoryId = null;
+                    loadFeeds();
+                }
+            }
         });
     }
     if (elements.mobileBackToEntries) {
@@ -2829,6 +2882,20 @@ async function loadAndRenderSystemSettings() {
     try {
         const response = await fetch('/settings');
         const settingsData = await response.json();
+        
+        // Load token stats
+        try {
+            const tokenResponse = await fetch('/settings/token-stats');
+            if (tokenResponse.ok) {
+                const tokenData = await tokenResponse.json();
+                const formatNum = (num) => Number(num || 0).toLocaleString();
+                document.getElementById('token-prompt-count').textContent = formatNum(tokenData.prompt_tokens);
+                document.getElementById('token-completion-count').textContent = formatNum(tokenData.completion_tokens);
+                document.getElementById('token-total-count').textContent = formatNum(tokenData.total_tokens);
+            }
+        } catch (tokenErr) {
+            console.error("Failed to load token stats:", tokenErr);
+        }
         
         if (elements.settingApiBase) elements.settingApiBase.value = localStorage.getItem('KICKRSS_API_BASE') || '';
         if (elements.settingFetchInterval) elements.settingFetchInterval.value = settingsData.fetch_interval_minutes;

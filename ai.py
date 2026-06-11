@@ -73,6 +73,20 @@ def call_chat_completion(
                 raise
                 
         result_json = response.json()
+        usage = result_json.get("usage")
+        if usage:
+            try:
+                from db import get_db
+                import crud
+                with get_db() as conn:
+                    crud.record_token_usage(
+                        conn,
+                        usage.get("prompt_tokens", 0),
+                        usage.get("completion_tokens", 0),
+                        usage.get("total_tokens", 0)
+                    )
+            except Exception as usage_err:
+                logger.error(f"Failed to record token usage: {usage_err}")
         return result_json["choices"][0]["message"]["content"]
     except Exception as e:
         logger.error(f"Error calling AI completions API at {url}: {e}", exc_info=True)
@@ -436,6 +450,11 @@ def get_chat_language_rule() -> str:
         "it": ("Italian (Italiano)", "意大利语")
     }
     target_lang = settings.summary_language
+    if target_lang == "auto" or not target_lang:
+        target_lang = settings.system_language
+    if not target_lang:
+        target_lang = "zh"
+
     if target_lang in lang_map:
         eng_name, chn_name = lang_map[target_lang]
         return (

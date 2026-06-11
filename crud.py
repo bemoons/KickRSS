@@ -892,3 +892,36 @@ def get_topic_detail(conn: sqlite3.Connection, topic_name: str) -> Optional[Dict
         "articles": articles
     }
 
+def record_token_usage(conn, prompt_tokens: int, completion_tokens: int, total_tokens: int):
+    import datetime
+    date_str = datetime.date.today().strftime('%Y-%m-%d')
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO token_usage (date, prompt_tokens, completion_tokens, total_tokens)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(date) DO UPDATE SET
+            prompt_tokens = prompt_tokens + excluded.prompt_tokens,
+            completion_tokens = completion_tokens + excluded.completion_tokens,
+            total_tokens = total_tokens + excluded.total_tokens
+    """, (date_str, prompt_tokens, completion_tokens, total_tokens))
+
+def get_daily_token_stats(conn) -> dict:
+    import datetime
+    date_str = datetime.date.today().strftime('%Y-%m-%d')
+    cursor = conn.cursor()
+    cursor.execute("SELECT prompt_tokens, completion_tokens, total_tokens FROM token_usage WHERE date = ?", (date_str,))
+    row = cursor.fetchone()
+    if row:
+        return {
+            "date": date_str,
+            "prompt_tokens": row[0],
+            "completion_tokens": row[1],
+            "total_tokens": row[2]
+        }
+    return {
+        "date": date_str,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0
+    }
+

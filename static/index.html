@@ -437,6 +437,18 @@
                                     <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">AI 模型名称</label>
                                     <input type="text" id="setting-ai-model" class="form-input" placeholder="留空以关闭 AI 功能..." style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
                                 </div>
+                                <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
+                                    <button type="button" id="btn-test-llm" style="padding: 6px 12px; border-radius: 6px; border: none; background: var(--accent-color, #6366f1); color: #fff; font-size: 11px; cursor: pointer; font-weight: 500; transition: background 0.2s;">检查 LLM API 可用性</button>
+                                    <span id="llm-test-result" style="font-size: 11px; color: var(--text-muted);"></span>
+                                </div>
+                                <div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); font-size: 11px;">
+                                    <span style="font-weight: 600; color: var(--text-secondary);">今日 AI Token 消耗 (Tokens):</span>
+                                    <div style="display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 4px; color: var(--text-muted);">
+                                        <span>输入: <strong id="token-prompt-count" style="color: var(--text-primary);">0</strong></span>
+                                        <span>输出: <strong id="token-completion-count" style="color: var(--text-primary);">0</strong></span>
+                                        <span>总计: <strong id="token-total-count" style="color: var(--text-primary);">0</strong></span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
