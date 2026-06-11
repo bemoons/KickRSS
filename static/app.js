@@ -357,7 +357,6 @@ function initEventListeners() {
             try {
                 const response = await fetch(`/entries/${entryId}/chat`, { method: 'DELETE' });
                 if (response.ok) {
-                    alert('笔记已成功删除');
                     reloadChatHistory(entryId);
                     
                     if (state.activeView === 'notes') {
@@ -366,18 +365,12 @@ function initEventListeners() {
                             card.style.transition = "opacity 0.2s ease, max-height 0.2s ease";
                             card.style.opacity = "0";
                             setTimeout(() => {
-                                card.remove();
-                                updateEntriesCountLabel();
-                                if (elements.entriesList.querySelectorAll('.entry-card').length === 0) {
-                                    elements.entriesList.innerHTML = `
-                                        <div class="empty-state">
-                                            <span class="empty-icon">☕</span>
-                                            <h3>没有找到文章</h3>
-                                            <p>该分类下目前没有符合筛选条件的文章。</p>
-                                        </div>
-                                    `;
-                                }
+                                state.entries = state.entries.filter(e => e.id !== entryId);
+                                refreshEntriesList();
                             }, 200);
+                        } else {
+                            state.entries = state.entries.filter(e => e.id !== entryId);
+                            refreshEntriesList();
                         }
                     }
                     
@@ -1316,17 +1309,8 @@ function refreshEntriesList(appendMode = false, newAddedData = []) {
                               card.style.transition = "opacity 0.2s ease, max-height 0.2s ease";
                               card.style.opacity = "0";
                               setTimeout(() => {
-                                  card.remove();
-                                  updateEntriesCountLabel();
-                                  if (elements.entriesList.querySelectorAll('.entry-card').length === 0) {
-                                      elements.entriesList.innerHTML = `
-                                          <div class="empty-state">
-                                              <span class="empty-icon">☕</span>
-                                              <h3>没有找到文章</h3>
-                                              <p>该分类下目前没有符合筛选条件的文章。</p>
-                                          </div>
-                                      `;
-                                  }
+                                  state.entries = state.entries.filter(e => e.id !== entry.id);
+                                  refreshEntriesList();
                               }, 200);
                           }
                       }
@@ -1854,23 +1838,14 @@ async function toggleCurrentEntryStarStatus() {
                     } else {
                         starBtn.classList.remove('starred');
                         starBtn.title = "加入收藏";
-                        if (state.activeView === 'starred') {
-                            card.style.transition = "opacity 0.2s ease, max-height 0.2s ease";
-                            card.style.opacity = "0";
-                            setTimeout(() => {
-                                card.remove();
-                                updateEntriesCountLabel();
-                                if (elements.entriesList.querySelectorAll('.entry-card').length === 0) {
-                                    elements.entriesList.innerHTML = `
-                                        <div class="empty-state">
-                                            <span class="empty-icon">☕</span>
-                                            <h3>没有找到文章</h3>
-                                            <p>该分类下目前没有符合筛选条件的文章。</p>
-                                        </div>
-                                    `;
-                                }
-                            }, 200);
-                        }
+                         if (state.activeView === 'starred') {
+                             card.style.transition = "opacity 0.2s ease, max-height 0.2s ease";
+                             card.style.opacity = "0";
+                             setTimeout(() => {
+                                 state.entries = state.entries.filter(e => e.id !== entry.id);
+                                 refreshEntriesList();
+                             }, 200);
+                         }
                     }
                 }
             }
@@ -4670,6 +4645,8 @@ async function refreshCurrentListView() {
             await loadCategoryEntries(state.selectedCategoryId, false);
         } else if (state.activeView === 'starred') {
             await loadStarredEntries(false);
+        } else if (state.activeView === 'notes') {
+            await loadNotesEntries(false);
         } else if (state.activeView === 'search') {
             const query = document.getElementById('search-input').value;
             await loadSearchEntries(query, false);
