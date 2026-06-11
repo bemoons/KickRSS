@@ -925,3 +925,25 @@ def get_daily_token_stats(conn) -> dict:
         "total_tokens": 0
     }
 
+def get_notes_entries(
+    conn: sqlite3.Connection, 
+    limit: int = 50, 
+    offset: int = 0
+) -> List[sqlite3.Row]:
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, feed_id, category_id, guid, title, url, author, published_at, fetched_at,
+               attention, likely_no_text, fulltext_ready, is_read, read_at, classified_at, is_starred
+        FROM entries
+        WHERE id IN (SELECT DISTINCT entry_id FROM chat_messages)
+        ORDER BY published_at DESC, id DESC
+        LIMIT ? OFFSET ?
+    """, (limit, offset))
+    return cursor.fetchall()
+
+def get_notes_entries_count(conn: sqlite3.Connection) -> Dict[str, int]:
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(DISTINCT entry_id) FROM chat_messages")
+    total = cursor.fetchone()[0]
+    return {"total_count": total}
+

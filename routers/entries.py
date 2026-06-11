@@ -164,8 +164,13 @@ def unread_multiple_entries(req: ReadEntries):
         return {"ok": True, "count": count}
 
 @router.get("/entries/{entry_id}/summary")
-def get_entry_summary(entry_id: int, stream: Optional[bool] = None, force: Optional[bool] = None):
-    is_stream, result = ai_service.get_entry_summary(entry_id, stream, force)
+def get_entry_summary(
+    entry_id: int, 
+    stream: Optional[bool] = None, 
+    force: Optional[bool] = None,
+    cache_only: Optional[bool] = None
+):
+    is_stream, result = ai_service.get_entry_summary(entry_id, stream, force, cache_only=bool(cache_only))
     if is_stream:
         return StreamingResponse(result, media_type="text/event-stream")
     else:
@@ -208,3 +213,27 @@ def record_engagement(entry_id: int, req: EngagementRequest):
 @router.post("/entries/{entry_id}/favorite")
 def toggle_favorite(entry_id: int):
     return entry_service.toggle_favorite(entry_id)
+
+@router.get("/entries/notes")
+def get_notes_entries(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0)
+):
+    with db.get_db() as conn:
+        rows = crud.get_notes_entries(conn, limit=limit, offset=offset)
+        result = []
+        feeds_cache = {}
+        for r in rows:
+            d = dict(r)
+            feed_id = d["feed_id"]
+            if feed_id not in feeds_cache:
+                feed = crud.get_feed_by_id(conn, feed_id)
+                feeds_cache[feed_id] = feed["title"] if feed else "Unknown"
+            d["feed_title"] = feeds_cache[feed_id]
+            result.append(d)
+        return result
+
+@router.get("/entries/notes/count")
+def get_notes_count():
+    with db.get_db() as conn:
+        return crud.get_notes_entries_count(conn)

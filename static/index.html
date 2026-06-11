@@ -79,6 +79,11 @@
                         <span class="item-text">我的收藏</span>
                         <span id="starred-count" class="badge">0</span>
                     </button>
+                    <button id="btn-notes" class="quick-link-item">
+                        <span class="item-icon">📝</span>
+                        <span class="item-text">我的笔记</span>
+                        <span id="notes-count" class="badge">0</span>
+                    </button>
                 </div>
                 
                 <div class="section-title-container">
@@ -115,6 +120,12 @@
                 </div>
                 
                 <div class="header-filters">
+                    <button id="select-all-notes-btn" class="btn-compact" style="margin-right: 8px; display: none;" title="全选/取消全选">
+                        全选
+                    </button>
+                    <button id="batch-export-notes-btn" class="btn-compact primary-btn" style="margin-right: 12px; display: none; background: var(--accent-color); color: white; border: none; opacity: 0.5; pointer-events: none;" title="导出选中的笔记">
+                        📥 批量导出
+                    </button>
                     <button id="mark-all-read-btn" class="btn-compact" style="margin-right: 12px; display: none;" title="将当前列表中的文章全部标记为已读">
                         一键已读
                     </button>

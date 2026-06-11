@@ -38,6 +38,7 @@ const state = {
     isBilingualMode: false,
     isTranslating: false,
     translatedContentCache: null,
+    selectedNotesIds: new Set(),
     
     // Pagination state for entries list
     entriesOffset: 0,
@@ -95,6 +96,10 @@ const elements = {
     chatInputField: document.getElementById('chat-input-field'),
     chatSendBtn: document.getElementById('chat-send-btn'),
     exportChatBtn: document.getElementById('export-chat-btn'),
+    btnNotes: document.getElementById('btn-notes'),
+    notesCount: document.getElementById('notes-count'),
+    btnSelectAllNotes: document.getElementById('select-all-notes-btn'),
+    btnBatchExportNotes: document.getElementById('batch-export-notes-btn'),
     
     // Footer Buttons
     refreshAllBtn: document.getElementById('refresh-all-btn'),
@@ -313,6 +318,7 @@ function initEventListeners() {
                 document.querySelectorAll('.category-row').forEach(node => node.classList.remove('active'));
                 if (elements.btnAllUnread) elements.btnAllUnread.classList.remove('active');
                 if (elements.btnStarred) elements.btnStarred.classList.remove('active');
+                if (elements.btnNotes) elements.btnNotes.classList.remove('active');
                 
                 if (elements.currentCategoryName) elements.currentCategoryName.textContent = `搜索: "${val}"`;
                 loadSearchEntries(val);
@@ -327,6 +333,15 @@ function initEventListeners() {
     }
     if (elements.btnStarred) {
         elements.btnStarred.addEventListener('click', () => selectStarredView());
+    }
+    if (elements.btnNotes) {
+        elements.btnNotes.addEventListener('click', () => selectNotesView());
+    }
+    if (elements.btnSelectAllNotes) {
+        elements.btnSelectAllNotes.addEventListener('click', () => toggleSelectAllNotes());
+    }
+    if (elements.btnBatchExportNotes) {
+        elements.btnBatchExportNotes.addEventListener('click', () => exportSelectedNotes());
     }
     
     // Theme Switcher
@@ -654,6 +669,7 @@ async function loadFeeds() {
         
         // Refresh starred count
         loadStarredCount();
+        loadNotesCount();
     } catch (e) {
         console.error("Failed to load feeds:", e);
     }
@@ -801,6 +817,7 @@ function selectGlobalUnread(isStartup = false) {
     document.querySelectorAll('.category-row').forEach(node => node.classList.remove('active'));
     elements.btnAllUnread.classList.add('active');
     elements.btnStarred.classList.remove('active');
+    if (elements.btnNotes) elements.btnNotes.classList.remove('active');
     
     elements.currentCategoryName.textContent = "所有未读";
     loadUnreadEntries();
@@ -820,6 +837,7 @@ function selectStarredView(isStartup = false) {
     document.querySelectorAll('.category-row').forEach(node => node.classList.remove('active'));
     elements.btnAllUnread.classList.remove('active');
     elements.btnStarred.classList.add('active');
+    if (elements.btnNotes) elements.btnNotes.classList.remove('active');
     
     elements.currentCategoryName.textContent = "我的收藏";
     loadStarredEntries();
@@ -867,6 +885,7 @@ async function selectFeed(feedId) {
     
     elements.btnAllUnread.classList.remove('active');
     elements.btnStarred.classList.remove('active');
+    if (elements.btnNotes) elements.btnNotes.classList.remove('active');
     
     // Refresh feeds listing highlights
     renderFeedsTree();
@@ -950,6 +969,7 @@ function selectCategory(feedId, catId, catName) {
     
     elements.btnAllUnread.classList.remove('active');
     elements.btnStarred.classList.remove('active');
+    if (elements.btnNotes) elements.btnNotes.classList.remove('active');
     
     // Highlight category in tree
     document.querySelectorAll('.feed-row').forEach(node => node.classList.remove('active'));
@@ -1045,6 +1065,8 @@ async function loadCategoryEntries(catId, appendMode = false) {
 }
 
 function refreshEntriesList(appendMode = false, newAddedData = []) {
+    toggleNotesHeaderControls(state.activeView === 'notes');
+    
     if (!appendMode) {
         elements.entriesList.innerHTML = '';
         
@@ -1123,6 +1145,11 @@ function refreshEntriesList(appendMode = false, newAddedData = []) {
         // Star indicator button
         const starIcon = `<span class="star-indicator-btn ${entry.is_starred === 1 ? 'starred' : ''}" title="${entry.is_starred === 1 ? '取消收藏' : '加入收藏'}">★</span>`;
         
+        // Checkbox for batch notes export
+        const checkboxHtml = state.activeView === 'notes'
+            ? `<input type="checkbox" class="note-selector-checkbox" data-id="${entry.id}" ${state.selectedNotesIds && state.selectedNotesIds.has(entry.id) ? 'checked' : ''} style="margin-right: 12px; cursor: pointer; transform: scale(1.2); flex-shrink: 0; align-self: center;" />`
+            : '';
+        
         card.innerHTML = `
             <div class="entry-card-bg-action">
                 <span>标记已读</span>
@@ -1130,19 +1157,37 @@ function refreshEntriesList(appendMode = false, newAddedData = []) {
                     <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
             </div>
-            <div class="entry-card-content">
-                <div class="card-meta">
-                    <span class="feed-badge">${entry.feed_title || ""}</span>
-                    <span>${dateStr}</span>
-                    ${attentionLabel}
-                    ${starIcon}
-                    ${unreadLight}
-                    <div class="card-indicators">${isVideo}</div>
+            <div class="entry-card-content" style="${state.activeView === 'notes' ? 'display: flex; flex-direction: row; align-items: center;' : ''}">
+                ${checkboxHtml}
+                <div style="${state.activeView === 'notes' ? 'flex-grow: 1; min-width: 0;' : ''}">
+                    <div class="card-meta">
+                        <span class="feed-badge">${entry.feed_title || ""}</span>
+                        <span>${dateStr}</span>
+                        ${attentionLabel}
+                        ${starIcon}
+                        ${unreadLight}
+                        <div class="card-indicators">${isVideo}</div>
+                    </div>
+                    <h4 class="card-title">${entry.title}</h4>
+                    <div class="card-desc">${entry.author || ""}</div>
                 </div>
-                <h4 class="card-title">${entry.title}</h4>
-                <div class="card-desc">${entry.author || ""}</div>
             </div>
         `;
+        
+        // Add click event for the note selector checkbox
+        const chk = card.querySelector('.note-selector-checkbox');
+        if (chk) {
+            chk.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = parseInt(chk.dataset.id);
+                if (chk.checked) {
+                    state.selectedNotesIds.add(id);
+                } else {
+                    state.selectedNotesIds.delete(id);
+                }
+                updateBatchNotesButtonsUI();
+            });
+        }
         
         // Add click event for the star button
         const starBtn = card.querySelector('.star-indicator-btn');
@@ -1230,6 +1275,10 @@ function refreshEntriesList(appendMode = false, newAddedData = []) {
         
         elements.entriesList.appendChild(card);
     });
+    
+    if (state.activeView === 'notes') {
+        updateBatchNotesButtonsUI();
+    }
 }
 
 async function loadMoreEntries() {
@@ -1256,6 +1305,8 @@ async function loadMoreEntries() {
             await loadCategoryEntries(state.selectedCategoryId, true);
         } else if (state.activeView === 'starred') {
             await loadStarredEntries(true);
+        } else if (state.activeView === 'notes') {
+            await loadNotesEntries(true);
         } else if (state.activeView === 'search') {
             const query = elements.searchInput.value.trim();
             if (query) {
@@ -1884,6 +1935,7 @@ async function reloadChatHistory(entryId) {
             `;
         }
         elements.chatHistory.scrollTop = elements.chatHistory.scrollHeight;
+        loadNotesCount();
     } catch (err) {
         console.error("Failed to load chat history:", err);
     }
@@ -2930,11 +2982,15 @@ async function exportReadingNotes() {
         let summaryContent = '';
         let clickbaitNote = '';
         
-        const sumRes = await fetch(`/entries/${entryId}/summary`);
-        if (sumRes.ok) {
-            const sumData = await sumRes.json();
-            summaryContent = sumData.summary || '';
-            clickbaitNote = sumData.clickbait_note || '';
+        try {
+            const sumRes = await fetch(`/entries/${entryId}/summary?stream=false`);
+            if (sumRes.ok) {
+                const sumData = await sumRes.json();
+                summaryContent = sumData.summary || '';
+                clickbaitNote = sumData.clickbait_note || '';
+            }
+        } catch (sumErr) {
+            console.warn("Failed to fetch summary for export:", sumErr);
         }
         
         // Format as Markdown
@@ -2975,6 +3031,240 @@ async function exportReadingNotes() {
     } catch (err) {
         console.error("Failed to export reading notes:", err);
         alert('导出阅读笔记失败，请重试');
+    }
+}
+
+async function loadNotesCount() {
+    try {
+        const response = await fetch('/entries/notes/count?t=' + Date.now());
+        if (response.ok) {
+            const data = await response.json();
+            if (elements.notesCount) elements.notesCount.textContent = data.total_count;
+        }
+    } catch (e) {
+        console.error("Failed to load notes count:", e);
+    }
+}
+
+function toggleNotesHeaderControls(isNotesView) {
+    const toggleContainer = document.querySelector('#entries-column .toggle-container');
+    if (isNotesView) {
+        if (elements.btnSelectAllNotes) elements.btnSelectAllNotes.style.display = 'inline-block';
+        if (elements.btnBatchExportNotes) elements.btnBatchExportNotes.style.display = 'inline-block';
+        if (elements.markAllReadBtn) elements.markAllReadBtn.style.display = 'none';
+        if (toggleContainer) toggleContainer.style.display = 'none';
+    } else {
+        if (elements.btnSelectAllNotes) elements.btnSelectAllNotes.style.display = 'none';
+        if (elements.btnBatchExportNotes) elements.btnBatchExportNotes.style.display = 'none';
+        if (toggleContainer) toggleContainer.style.display = 'flex';
+    }
+}
+
+function toggleSelectAllNotes() {
+    const checkboxes = elements.entriesList.querySelectorAll('.note-selector-checkbox');
+    if (checkboxes.length === 0) return;
+    
+    let allChecked = true;
+    checkboxes.forEach(chk => {
+        if (!chk.checked) allChecked = false;
+    });
+    
+    checkboxes.forEach(chk => {
+        const id = parseInt(chk.dataset.id);
+        chk.checked = !allChecked;
+        if (chk.checked) {
+            state.selectedNotesIds.add(id);
+        } else {
+            state.selectedNotesIds.delete(id);
+        }
+    });
+    
+    updateBatchNotesButtonsUI();
+}
+
+async function exportSelectedNotes() {
+    if (!state.selectedNotesIds || state.selectedNotesIds.size === 0) {
+        alert('请先勾选需要导出的笔记文章');
+        return;
+    }
+    
+    const ids = Array.from(state.selectedNotesIds);
+    const originalText = elements.btnBatchExportNotes.textContent;
+    elements.btnBatchExportNotes.textContent = '⏳ 正在导出...';
+    elements.btnBatchExportNotes.disabled = true;
+    
+    try {
+        let compiledMd = `# KickRSS AI 智能阅读笔记合集\n\n`;
+        compiledMd += `- **导出数量**: ${ids.length} 篇\n`;
+        compiledMd += `- **导出时间**: ${new Date().toLocaleString()}\n\n`;
+        compiledMd += `\n---\n\n`;
+        
+        const fetchPromises = ids.map(async (id) => {
+            const entry = state.entries.find(e => e.id === id) || { id, title: `文章 #${id}` };
+            
+            let chatHistory = [];
+            let summaryContent = '';
+            let clickbaitNote = '';
+            
+            try {
+                const chatRes = await fetch(`/entries/${id}/chat`);
+                if (chatRes.ok) {
+                    chatHistory = await chatRes.json();
+                }
+            } catch (err) {
+                console.error(`Failed to fetch chat history for entry ${id}:`, err);
+            }
+            
+            try {
+                const sumRes = await fetch(`/entries/${id}/summary?stream=false&cache_only=true`);
+                if (sumRes.ok) {
+                    const sumData = await sumRes.json();
+                    summaryContent = sumData.summary || '';
+                    clickbaitNote = sumData.clickbait_note || '';
+                }
+            } catch (err) {
+                console.error(`Failed to fetch summary for entry ${id}:`, err);
+            }
+            
+            return {
+                entry,
+                chatHistory,
+                summaryContent,
+                clickbaitNote
+            };
+        });
+        
+        const results = await Promise.all(fetchPromises);
+        
+        results.forEach(({ entry, chatHistory, summaryContent, clickbaitNote }) => {
+            compiledMd += `## 📝 ${entry.title}\n\n`;
+            compiledMd += `- **原文链接**: ${entry.url || '无'}\n`;
+            if (entry.feed_title) {
+                compiledMd += `- **订阅源**: ${entry.feed_title}\n`;
+            }
+            compiledMd += '\n';
+            
+            if (summaryContent && summaryContent.trim() !== '') {
+                compiledMd += `### ✨ AI 智能总结\n\n${summaryContent}\n\n`;
+            }
+            
+            if (clickbaitNote && clickbaitNote.trim() !== '') {
+                compiledMd += `> [!WARNING] 【标题警告】\n> ${clickbaitNote}\n\n`;
+            }
+            
+            if (chatHistory && chatHistory.length > 0) {
+                compiledMd += `### 💬 AI 追问对话记录\n\n`;
+                chatHistory.forEach(msg => {
+                    const roleName = msg.role === 'user' ? '👤 我' : '🤖 AI';
+                    compiledMd += `#### ${roleName}\n${msg.content}\n\n`;
+                });
+            } else {
+                compiledMd += `*(暂无 AI 对话记录)*\n\n`;
+            }
+            
+            compiledMd += `\n---\n\n`;
+        });
+        
+        const blob = new Blob([compiledMd], { type: 'text/markdown;charset=utf-8' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        a.download = `KickRSS_AI笔记合集_${dateStr}.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+    } catch (err) {
+        console.error("Failed to batch export notes:", err);
+        alert('批量导出笔记失败，请重试');
+    } finally {
+        elements.btnBatchExportNotes.textContent = originalText;
+        elements.btnBatchExportNotes.disabled = false;
+    }
+}
+
+function updateBatchNotesButtonsUI() {
+    if (!state.selectedNotesIds) return;
+    
+    const totalSelected = state.selectedNotesIds.size;
+    if (elements.btnBatchExportNotes) {
+        if (totalSelected > 0) {
+            elements.btnBatchExportNotes.textContent = `📥 批量导出 (${totalSelected})`;
+            elements.btnBatchExportNotes.style.opacity = '1';
+            elements.btnBatchExportNotes.style.pointerEvents = 'auto';
+        } else {
+            elements.btnBatchExportNotes.textContent = `📥 批量导出`;
+            elements.btnBatchExportNotes.style.opacity = '0.5';
+            elements.btnBatchExportNotes.style.pointerEvents = 'none';
+        }
+    }
+    
+    if (elements.btnSelectAllNotes) {
+        const checkboxes = elements.entriesList.querySelectorAll('.note-selector-checkbox');
+        let allChecked = checkboxes.length > 0;
+        checkboxes.forEach(chk => {
+            if (!chk.checked) allChecked = false;
+        });
+        
+        if (checkboxes.length > 0 && allChecked) {
+            elements.btnSelectAllNotes.textContent = '取消全选';
+        } else {
+            elements.btnSelectAllNotes.textContent = '全选';
+        }
+    }
+}
+
+function selectNotesView(isStartup = false) {
+    state.activeView = 'notes';
+    state.selectedFeedId = null;
+    state.selectedCategoryId = null;
+    state.selectedNotesIds = new Set();
+    
+    document.querySelectorAll('.feed-row').forEach(node => node.classList.remove('active'));
+    document.querySelectorAll('.category-row').forEach(node => node.classList.remove('active'));
+    elements.btnAllUnread.classList.remove('active');
+    elements.btnStarred.classList.remove('active');
+    if (elements.btnNotes) elements.btnNotes.classList.add('active');
+    
+    elements.currentCategoryName.textContent = "我的笔记";
+    loadNotesEntries();
+    updateBatchNotesButtonsUI();
+    
+    if (isStartup !== true) {
+        document.body.classList.add('show-entries');
+    }
+}
+
+async function loadNotesEntries(appendMode = false) {
+    if (!appendMode) {
+        state.entriesOffset = 0;
+        state.hasMoreEntries = true;
+        elements.entriesList.innerHTML = '<div class="loading-placeholder">正在加载笔记文章...</div>';
+    }
+    try {
+        const offset = state.entriesOffset;
+        const limit = state.entriesLimit;
+        const response = await fetch(`/entries/notes?limit=${limit}&offset=${offset}`);
+        const data = await response.json();
+        
+        if (data.length < limit) {
+            state.hasMoreEntries = false;
+        }
+        
+        if (appendMode) {
+            state.entries = [...state.entries, ...data];
+        } else {
+            state.entries = data;
+        }
+        state.entriesOffset += data.length;
+        refreshEntriesList(appendMode, data);
+    } catch (e) {
+        console.error("Failed to load notes entries:", e);
+        if (!appendMode) {
+            elements.entriesList.innerHTML = '<div class="loading-placeholder">加载笔记文章失败</div>';
+        }
     }
 }
 

@@ -83,7 +83,7 @@ def generate_stream_summary(entry_id: int, title: str, url: str, ft_text: str, d
         logger.error(f"Error in stream summary service for entry {entry_id}: {e}", exc_info=True)
         yield f"data: {json.dumps({'summary': '', 'clickbait_note': None, 'status': 'error', 'detail': str(e)}, ensure_ascii=False)}\n\n"
 
-def get_entry_summary(entry_id: int, stream: Optional[bool] = None, force: Optional[bool] = None) -> Tuple[bool, Any]:
+def get_entry_summary(entry_id: int, stream: Optional[bool] = None, force: Optional[bool] = None, cache_only: bool = False) -> Tuple[bool, Any]:
     """
     Get summary for an entry.
     Returns:
@@ -120,6 +120,13 @@ def get_entry_summary(entry_id: int, stream: Optional[bool] = None, force: Optio
                     "clickbait_note": cached_click,
                     "status": "ok"
                 }
+
+        if cache_only:
+            return False, {
+                "summary": "",
+                "clickbait_note": None,
+                "status": "no_cache"
+            }
 
     # Ensure fulltext exists
     with db.get_db() as conn:
