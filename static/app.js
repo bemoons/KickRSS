@@ -206,6 +206,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 .catch(err => console.warn('ServiceWorker registration failed: ', err));
         });
     }
+
+    // iOS Safari PWA Badge Permission Request
+    if (window.navigator.standalone && 'Notification' in window) {
+        if (Notification.permission === 'default') {
+            const requestPermission = () => {
+                Notification.requestPermission().then(permission => {
+                    console.log("iOS Notification permission response:", permission);
+                    if (permission === 'granted' && state.feeds) {
+                        let totalUnread = 0;
+                        state.feeds.forEach(f => totalUnread += f.unread_count || 0);
+                        if (totalUnread > 0 && 'setAppBadge' in navigator) {
+                            navigator.setAppBadge(totalUnread).catch(err => console.error("Error setting app badge:", err));
+                        }
+                    }
+                }).catch(err => console.error("Failed to request notification permission:", err));
+                document.removeEventListener('click', requestPermission);
+                document.removeEventListener('touchstart', requestPermission);
+            };
+            document.addEventListener('click', requestPermission);
+            document.addEventListener('touchstart', requestPermission);
+        }
+    }
 });
 
 async function loadSettingsOnStartup() {
