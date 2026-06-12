@@ -321,6 +321,31 @@ body.resizing .column-resizer.dragging {
     overflow: hidden;
     transition: all 0.2s ease;
 }
+/* Drag and Drop Sorting Styles */
+.feed-item.dragging {
+    opacity: 0.4;
+    border: 2px dashed var(--accent-indigo, #6366f1);
+}
+.feed-item.drag-over-top {
+    border-top: 2px solid var(--accent-indigo, #6366f1);
+}
+.feed-item.drag-over-bottom {
+    border-bottom: 2px solid var(--accent-indigo, #6366f1);
+}
+.feed-row .drag-handle {
+    margin-right: 6px;
+    cursor: grab;
+    opacity: 0.3;
+    font-size: 14px;
+    user-select: none;
+    transition: opacity 0.2s;
+}
+.feed-row:hover .drag-handle {
+    opacity: 0.7;
+}
+.feed-row .drag-handle:hover {
+    opacity: 1;
+}
 .feed-row {
     display: flex;
     align-items: center;

@@ -823,6 +823,8 @@ async function loadStarredCount() {
     }
 }
 
+let draggingElement = null;
+
 function renderFeedsTree() {
     elements.feedsList.innerHTML = '';
     
@@ -836,10 +838,95 @@ function renderFeedsTree() {
         return;
     }
     
+    // Sort state.feeds based on custom order in localStorage
+    const savedOrder = JSON.parse(window.localStorage.getItem('KICKRSS_MANUAL_FEED_ORDER') || '[]');
+    state.feeds.sort((a, b) => {
+        const idxA = savedOrder.indexOf(a.id);
+        const idxB = savedOrder.indexOf(b.id);
+        
+        if (idxA !== -1 && idxB !== -1) {
+            return idxA - idxB;
+        }
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return a.title.localeCompare(b.title, 'zh-CN');
+    });
+    
     state.feeds.forEach(feed => {
         const feedItem = document.createElement('div');
         feedItem.className = 'feed-item';
         feedItem.dataset.id = feed.id;
+        
+        // Make feedItem draggable for manual sorting
+        feedItem.setAttribute('draggable', true);
+        
+        feedItem.addEventListener('dragstart', (e) => {
+            draggingElement = feedItem;
+            feedItem.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        
+        feedItem.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (feedItem === draggingElement) return;
+            
+            const rect = feedItem.getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            
+            feedItem.classList.remove('drag-over-top', 'drag-over-bottom');
+            if (e.clientY < midpoint) {
+                feedItem.classList.add('drag-over-top');
+            } else {
+                feedItem.classList.add('drag-over-bottom');
+            }
+        });
+        
+        feedItem.addEventListener('dragleave', () => {
+            feedItem.classList.remove('drag-over-top', 'drag-over-bottom');
+        });
+        
+        feedItem.addEventListener('dragend', () => {
+            feedItem.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom');
+            document.querySelectorAll('.feed-item').forEach(el => {
+                el.classList.remove('drag-over-top', 'drag-over-bottom');
+            });
+            draggingElement = null;
+        });
+        
+        feedItem.addEventListener('drop', (e) => {
+            e.preventDefault();
+            feedItem.classList.remove('drag-over-top', 'drag-over-bottom');
+            if (!draggingElement || feedItem === draggingElement) return;
+            
+            const draggedId = parseInt(draggingElement.dataset.id);
+            const targetId = parseInt(feedItem.dataset.id);
+            
+            const rect = feedItem.getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            const insertBefore = e.clientY < midpoint;
+            
+            const draggedFeedIndex = state.feeds.findIndex(f => f.id === draggedId);
+            const draggedFeed = state.feeds[draggedFeedIndex];
+            
+            // Remove from old position
+            state.feeds.splice(draggedFeedIndex, 1);
+            
+            // Find target position after removal
+            let targetFeedIndex = state.feeds.findIndex(f => f.id === targetId);
+            if (!insertBefore) {
+                targetFeedIndex += 1;
+            }
+            
+            // Insert at new position
+            state.feeds.splice(targetFeedIndex, 0, draggedFeed);
+            
+            // Save new order to localStorage
+            const feedIds = state.feeds.map(f => f.id);
+            window.localStorage.setItem('KICKRSS_MANUAL_FEED_ORDER', JSON.stringify(feedIds));
+            
+            // Re-render immediately
+            renderFeedsTree();
+        });
         
         // Expand automatically if selected
         if (state.selectedFeedId === feed.id) {
@@ -850,6 +937,7 @@ function renderFeedsTree() {
         feedRow.className = `feed-row ${state.selectedFeedId === feed.id && state.selectedCategoryId === null ? 'active' : ''} ${feed.enabled ? '' : 'disabled'}`;
         
         feedRow.innerHTML = `
+            <span class="drag-handle" title="按住拖动排序">⋮⋮</span>
             <span class="toggle-icon">▶</span>
             <span class="feed-icon">📰</span>
             <span class="feed-title-text" title="${feed.title}">${feed.title}</span>
