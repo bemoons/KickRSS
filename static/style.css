@@ -881,7 +881,7 @@ input:checked + .slider:before {
 }
 .art-title {
     font-family: var(--font-title);
-    font-size: 26px;
+    font-size: 24px;
     line-height: 1.35;
     font-weight: 700;
     margin-bottom: 16px;
@@ -1015,7 +1015,7 @@ input:checked + .slider:before {
 
 .ai-box-body {
     padding: 20px;
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1.6;
     color: var(--text-primary);
 }
@@ -1103,7 +1103,7 @@ input:checked + .slider:before {
 
 .fulltext-body {
     margin-top: 20px;
-    font-size: 16px;
+    font-size: 15px;
     line-height: 1.85;
     color: var(--text-primary);
     border-top: 1px solid var(--border-color);
@@ -2391,13 +2391,13 @@ body.light-theme .feed-switch input.feed-enabled-toggle:checked + .feed-slider {
     
     /* Article reading */
     .art-title {
-        font-size: 28px !important;
+        font-size: 26px !important;
     }
     .fulltext-body {
-        font-size: 17px !important;
+        font-size: 16px !important;
     }
     .ai-box-body {
-        font-size: 15px !important;
+        font-size: 14px !important;
     }
     .chat-bubble {
         font-size: 14px !important;
@@ -2442,13 +2442,13 @@ body.light-theme .feed-switch input.feed-enabled-toggle:checked + .feed-slider {
     
     /* Article reading */
     .art-title {
-        font-size: 30px !important;
+        font-size: 28px !important;
     }
     .fulltext-body {
-        font-size: 18px !important;
+        font-size: 17px !important;
     }
     .ai-box-body {
-        font-size: 16px !important;
+        font-size: 15px !important;
     }
     .chat-bubble {
         font-size: 14.5px !important;
@@ -2493,13 +2493,13 @@ body.light-theme .feed-switch input.feed-enabled-toggle:checked + .feed-slider {
     
     /* Article reading */
     .art-title {
-        font-size: 32px !important;
+        font-size: 30px !important;
     }
     .fulltext-body {
-        font-size: 19px !important;
+        font-size: 18px !important;
     }
     .ai-box-body {
-        font-size: 17px !important;
+        font-size: 16px !important;
     }
     .chat-bubble {
         font-size: 15px !important;
