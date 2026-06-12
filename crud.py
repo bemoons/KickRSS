@@ -874,10 +874,11 @@ def get_topic_detail(conn: sqlite3.Connection, topic_name: str) -> Optional[Dict
                 pub_date_str = pub_at_str[:10]
                 pub_date = datetime.datetime.strptime(pub_date_str, "%Y-%m-%d").date()
                 day_diff = (today - pub_date).days
-                if day_diff >= 0:
-                    week_index = 11 - (day_diff // 7)
-                    if 0 <= week_index < 12:
-                        weekly_trend[week_index] += 1
+                if day_diff < 0:
+                    day_diff = 0
+                week_index = 11 - (day_diff // 7)
+                if 0 <= week_index < 12:
+                    weekly_trend[week_index] += 1
             except Exception:
                 pass
                 

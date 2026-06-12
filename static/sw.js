@@ -44,7 +44,17 @@ self.addEventListener('fetch', (e) => {
       url.pathname.startsWith('/categories') || 
       url.pathname.startsWith('/search')) {
     e.respondWith(
-      fetch(e.request).catch(() => {
+      fetch(e.request).then((networkResponse) => {
+        if (networkResponse.redirected) {
+          // If the API call gets redirected (e.g. to a login page because credentials expired),
+          // return a clean 401 response so the browser/frontend handles it cleanly.
+          return new Response('Unauthorized', {
+            status: 401,
+            statusText: 'Unauthorized'
+          });
+        }
+        return networkResponse;
+      }).catch(() => {
         return caches.match(e.request);
       })
     );
@@ -59,6 +69,16 @@ self.addEventListener('fetch', (e) => {
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(e.request, networkResponse.clone());
           });
+        }
+        if (networkResponse && networkResponse.redirected) {
+          if (e.request.mode === 'navigate') {
+            // For navigation requests, return a clean HTML response with a redirect script
+            // to strip Safari's internal redirect metadata and trigger client-side navigation.
+            return new Response(
+              `<script>window.location.replace("${networkResponse.url}");</script>`,
+              { headers: { 'Content-Type': 'text/html' } }
+            );
+          }
         }
         return networkResponse;
       }).catch(() => {
