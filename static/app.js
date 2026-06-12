@@ -1645,8 +1645,20 @@ async function selectEntry(entryId) {
         }
     });
     
-    const entry = state.entries.find(e => e.id === entryId);
-    if (!entry) return;
+    let entry = state.entries.find(e => e.id === entryId);
+    if (!entry) {
+        try {
+            const response = await fetch(`/entries/${entryId}`);
+            if (!response.ok) {
+                console.error(`Failed to fetch entry details for id: ${entryId}`);
+                return;
+            }
+            entry = await response.json();
+        } catch (err) {
+            console.error("Error fetching entry details:", err);
+            return;
+        }
+    }
     
     state.currentOpenEntry = entry;
     
