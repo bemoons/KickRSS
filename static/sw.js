@@ -78,6 +78,13 @@ self.addEventListener('fetch', (e) => {
               `<script>window.location.replace("${networkResponse.url}");</script>`,
               { headers: { 'Content-Type': 'text/html' } }
             );
+          } else {
+            // For non-navigation requests (like app.js, style.css, etc.), return a clean 401
+            // to prevent WebKit (Safari) from crashing with "Response served by service worker has redirections".
+            return new Response('Unauthorized', {
+              status: 401,
+              statusText: 'Unauthorized'
+            });
           }
         }
         return networkResponse;
