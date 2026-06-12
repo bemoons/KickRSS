@@ -473,14 +473,10 @@ body.resizing .column-resizer.dragging {
     align-items: center;
     gap: 12px;
     overflow: hidden;
-    flex: 1;
-    min-width: 0;
-    margin-right: 16px;
 }
 .title-meta {
     display: flex;
     flex-direction: column;
-    min-width: 0;
 }
 .header-title {
     font-family: var(--font-title);
@@ -489,7 +485,6 @@ body.resizing .column-resizer.dragging {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    min-width: 0;
 }
 .header-subtitle {
     font-size: 11px;
@@ -886,7 +881,7 @@ input:checked + .slider:before {
 }
 .art-title {
     font-family: var(--font-title);
-    font-size: 24px;
+    font-size: 26px;
     line-height: 1.35;
     font-weight: 700;
     margin-bottom: 16px;
@@ -1020,7 +1015,7 @@ input:checked + .slider:before {
 
 .ai-box-body {
     padding: 20px;
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.6;
     color: var(--text-primary);
 }
@@ -1108,7 +1103,7 @@ input:checked + .slider:before {
 
 .fulltext-body {
     margin-top: 20px;
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1.85;
     color: var(--text-primary);
     border-top: 1px solid var(--border-color);
@@ -2086,35 +2081,6 @@ input:checked + .feed-slider:before {
     }
     .manage-item-actions {
         justify-content: flex-end;
-    }
-    
-    /* Mobile Compact Header Fix to prevent long titles blocking buttons */
-    .panel-header {
-        padding: 8px 12px !important;
-        padding-top: calc(8px + env(safe-area-inset-top)) !important;
-    }
-    .header-nav {
-        gap: 8px !important;
-        margin-right: 8px !important;
-    }
-    .header-title {
-        font-size: 15px !important;
-    }
-    .btn-compact {
-        padding: 0 8px !important;
-        font-size: 10px !important;
-        height: 24px !important;
-    }
-    .toggle-container {
-        padding: 4px 8px !important;
-        gap: 6px !important;
-    }
-    .toggle-label {
-        font-size: 10px !important;
-    }
-    .switch {
-        transform: scale(0.85);
-        margin-right: 2px !important;
     }
 }
 

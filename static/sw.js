@@ -53,7 +53,6 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       fetch(e.request).then((networkResponse) => {
         const isRedirected = networkResponse.redirected || 
-                             networkResponse.status === 0 || 
                              networkResponse.type === 'opaqueredirect' || 
                              (networkResponse.status >= 300 && networkResponse.status < 400);
         if (isRedirected) {
@@ -82,7 +81,6 @@ self.addEventListener('fetch', (e) => {
 
       const fetchPromise = fetch(fetchRequest).then((networkResponse) => {
         const isRedirected = networkResponse.redirected || 
-                             networkResponse.status === 0 || 
                              networkResponse.type === 'opaqueredirect' || 
                              (networkResponse.status >= 300 && networkResponse.status < 400);
 
