@@ -195,9 +195,8 @@ const elements = {
     profileDetailTrendTitle: document.getElementById('profile-detail-trend-title'),
     profileTabWeekContent: document.getElementById('profile-tab-week-content'),
     profileTabMonthContent: document.getElementById('profile-tab-month-content'),
-    profileActivityHeatmap: document.getElementById('profile-activity-heatmap'),
-    profileHabitInsightText: document.getElementById('profile-habit-insight-text'),
-    profileCategoryDistributionList: document.getElementById('profile-category-distribution-list')
+    profileCategoryDistributionList: document.getElementById('profile-category-distribution-list'),
+    profileHeatmapLegend: document.getElementById('profile-heatmap-legend')
 };
 
 // ----------------------------------------------------
@@ -746,7 +745,7 @@ function initEventListeners() {
             if (elements.profileTabMonthContent) elements.profileTabMonthContent.classList.add('hidden');
             
             if (state.interestProfileData) {
-                renderProfileWeeklyActivity(state.interestProfileData.activity_timestamps);
+                renderProfileTokenStats(state.interestProfileData.token_stats);
                 renderProfileCategoryDistribution(state.interestProfileData.category_distribution);
             }
         });
@@ -944,6 +943,79 @@ function renderFeedsTree() {
             ${feed.unread_count > 0 ? `<span class="unread-badge">${feed.unread_count}</span>` : ''}
         `;
         
+        const dragHandle = feedRow.querySelector('.drag-handle');
+        
+        // Mobile touch support for manual drag-and-drop sorting
+        dragHandle.addEventListener('touchstart', (e) => {
+            // Stop standard touch scrolling/selection when dragging starts
+            e.preventDefault();
+            draggingElement = feedItem;
+            feedItem.classList.add('dragging');
+        }, { passive: false });
+        
+        dragHandle.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!draggingElement) return;
+            const touch = e.touches[0];
+            const element = document.elementFromPoint(touch.clientX, touch.clientY);
+            const targetFeedItem = element ? element.closest('.feed-item') : null;
+            
+            // Clear hover classes from all items
+            document.querySelectorAll('.feed-item').forEach(el => {
+                if (el !== targetFeedItem) {
+                    el.classList.remove('drag-over-top', 'drag-over-bottom');
+                }
+            });
+            
+            if (targetFeedItem && targetFeedItem !== draggingElement) {
+                const rect = targetFeedItem.getBoundingClientRect();
+                const midpoint = rect.top + rect.height / 2;
+                targetFeedItem.classList.remove('drag-over-top', 'drag-over-bottom');
+                if (touch.clientY < midpoint) {
+                    targetFeedItem.classList.add('drag-over-top');
+                } else {
+                    targetFeedItem.classList.add('drag-over-bottom');
+                }
+            }
+        }, { passive: false });
+        
+        dragHandle.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if (!draggingElement) return;
+            
+            const targetFeedItem = document.querySelector('.feed-item.drag-over-top, .feed-item.drag-over-bottom');
+            
+            feedItem.classList.remove('dragging');
+            document.querySelectorAll('.feed-item').forEach(el => {
+                el.classList.remove('drag-over-top', 'drag-over-bottom');
+            });
+            
+            if (targetFeedItem && targetFeedItem !== draggingElement) {
+                const insertBefore = targetFeedItem.classList.contains('drag-over-top');
+                const draggedId = parseInt(draggingElement.dataset.id);
+                const targetId = parseInt(targetFeedItem.dataset.id);
+                
+                const draggedFeedIndex = state.feeds.findIndex(f => f.id === draggedId);
+                const draggedFeed = state.feeds[draggedFeedIndex];
+                
+                state.feeds.splice(draggedFeedIndex, 1);
+                
+                let targetFeedIndex = state.feeds.findIndex(f => f.id === targetId);
+                if (!insertBefore) {
+                    targetFeedIndex += 1;
+                }
+                
+                state.feeds.splice(targetFeedIndex, 0, draggedFeed);
+                
+                window.localStorage.setItem('KICKRSS_MANUAL_FEED_ORDER', JSON.stringify(state.feeds.map(f => f.id)));
+                
+                draggingElement = null;
+                renderFeedsTree();
+            } else {
+                draggingElement = null;
+            }
+        }, { passive: false });
+
         // Click on toggle expands tree
         feedRow.querySelector('.toggle-icon').addEventListener('click', (e) => {
             e.stopPropagation();
@@ -4970,7 +5042,7 @@ async function showProfileModal() {
         if (elements.profileTabMonthContent) elements.profileTabMonthContent.classList.remove('hidden');
         if (elements.profileTabWeekContent) elements.profileTabWeekContent.classList.add('hidden');
         
-        renderProfileWeeklyActivity(data.activity_timestamps || []);
+        renderProfileTokenStats(data.token_stats || []);
         renderProfileTagCloud(data.topics || { high_interest: [], low_interest: [] });
         if (data.topics) {
             renderProfileHeatmap(data.topics);
@@ -5206,135 +5278,102 @@ async function showTopicDetail(topicName) {
     }
 }
 
-function renderProfileWeeklyActivity(timestamps) {
+function renderProfileTokenStats(tokenStats) {
     if (!elements.profileActivityHeatmap) return;
     elements.profileActivityHeatmap.innerHTML = '';
     
-    // Matrix of 4 periods (rows) x 7 days (cols)
-    // Rows: 0=Morning(6-12), 1=Afternoon(12-18), 2=Evening(18-24), 3=Night(0-6)
-    // Cols: 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
-    const matrix = Array.from({ length: 4 }, () => Array(7).fill(0));
+    if (elements.profileHeatmapLegend) {
+        elements.profileHeatmapLegend.classList.add('hidden');
+    }
     
-    // Populate matrix from local timestamps
-    timestamps.forEach(ts => {
-        try {
-            const date = new Date(ts);
-            if (isNaN(date.getTime())) return;
-            
-            let day = date.getDay() - 1;
-            if (day === -1) day = 6;
-            
-            const hour = date.getHours();
-            let period = 3; // Night (0-6)
-            if (hour >= 6 && hour < 12) period = 0; // Morning (6-12)
-            else if (hour >= 12 && hour < 18) period = 1; // Afternoon (12-18)
-            else if (hour >= 18 && hour < 24) period = 2; // Evening (18-24)
-            
-            matrix[period][day]++;
-        } catch (e) {
-            console.error("Error parsing timestamp:", ts, e);
-        }
+    const container = elements.profileActivityHeatmap;
+    container.style.display = 'flex';
+    container.style.flexDirection = 'row';
+    container.style.alignItems = 'flex-end';
+    container.style.justifyContent = 'space-between';
+    container.style.height = '160px';
+    container.style.padding = '20px 10px 10px 10px';
+    container.style.gap = '15px';
+    container.style.minWidth = 'unset';
+    
+    // Find max token count to scale the bars
+    const maxTokens = Math.max(...tokenStats.map(d => d.total_tokens), 1);
+    
+    tokenStats.forEach(day => {
+        const col = document.createElement('div');
+        col.style.display = 'flex';
+        col.style.flexDirection = 'column';
+        col.style.alignItems = 'center';
+        col.style.flex = '1';
+        col.style.height = '100%';
+        col.style.justifyContent = 'flex-end';
+        
+        // Bar wrapper to align bar at bottom
+        const barWrapper = document.createElement('div');
+        barWrapper.style.width = '100%';
+        barWrapper.style.flex = '1';
+        barWrapper.style.display = 'flex';
+        barWrapper.style.flexDirection = 'column';
+        barWrapper.style.justifyContent = 'flex-end';
+        barWrapper.style.alignItems = 'center';
+        barWrapper.style.position = 'relative';
+        
+        // The bar itself
+        const ratio = day.total_tokens / maxTokens;
+        const bar = document.createElement('div');
+        bar.style.width = '70%';
+        bar.style.maxWidth = '30px';
+        bar.style.height = `${Math.max(ratio * 100, 2)}%`;
+        bar.style.background = 'linear-gradient(180deg, var(--accent-indigo, #6366f1) 0%, rgba(99, 102, 241, 0.4) 100%)';
+        bar.style.borderRadius = '4px 4px 0 0';
+        bar.style.transition = 'all 0.3s ease';
+        bar.style.cursor = 'pointer';
+        
+        // Tooltip or text bubble on hover
+        const tokenLabel = document.createElement('div');
+        tokenLabel.style.position = 'absolute';
+        tokenLabel.style.bottom = `${ratio * 100 + 4}%`;
+        tokenLabel.style.fontSize = '9px';
+        tokenLabel.style.color = 'var(--text-primary)';
+        tokenLabel.style.fontWeight = '600';
+        tokenLabel.style.opacity = '0';
+        tokenLabel.style.transition = 'opacity 0.2s';
+        tokenLabel.style.whiteSpace = 'nowrap';
+        tokenLabel.textContent = day.total_tokens;
+        barWrapper.appendChild(tokenLabel);
+        
+        // Show label on hover
+        bar.addEventListener('mouseenter', () => {
+            bar.style.filter = 'brightness(1.2)';
+            tokenLabel.style.opacity = '1';
+        });
+        bar.addEventListener('mouseleave', () => {
+            bar.style.filter = 'none';
+            tokenLabel.style.opacity = '0';
+        });
+        
+        barWrapper.appendChild(bar);
+        col.appendChild(barWrapper);
+        
+        // Date label
+        const dateLabel = document.createElement('div');
+        dateLabel.style.fontSize = '10px';
+        dateLabel.style.color = 'var(--text-secondary)';
+        dateLabel.style.marginTop = '6px';
+        const shortDate = day.date.slice(5);
+        dateLabel.textContent = shortDate;
+        col.appendChild(dateLabel);
+        
+        container.appendChild(col);
     });
-    
-    // Header Row
-    const headerRow = document.createElement('div');
-    headerRow.style.display = 'flex';
-    headerRow.style.alignItems = 'center';
-    headerRow.style.gap = '4px';
-    headerRow.style.fontSize = '9px';
-    headerRow.style.color = 'var(--text-muted)';
-    headerRow.style.fontWeight = '600';
-    headerRow.style.paddingBottom = '4px';
-    headerRow.style.borderBottom = '1px solid var(--border-color)';
-    
-    const timeColHeader = document.createElement('div');
-    timeColHeader.style.width = '120px';
-    timeColHeader.textContent = '阅读时段';
-    headerRow.appendChild(timeColHeader);
-    
-    const daysContainerHeader = document.createElement('div');
-    daysContainerHeader.style.display = 'flex';
-    daysContainerHeader.style.gap = '4px';
-    daysContainerHeader.style.flex = '1';
-    daysContainerHeader.style.justifyContent = 'space-between';
-    
-    const dayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-    dayLabels.forEach(label => {
-        const dLabel = document.createElement('div');
-        dLabel.style.width = '35px';
-        dLabel.style.textAlign = 'center';
-        dLabel.textContent = label;
-        daysContainerHeader.appendChild(dLabel);
-    });
-    headerRow.appendChild(daysContainerHeader);
-    elements.profileActivityHeatmap.appendChild(headerRow);
-    
-    const periodLabels = [
-        '🌅 清晨/上午 (06-12)',
-        '☀️ 中午/下午 (12-18)',
-        '🌙 傍晚/晚上 (18-24)',
-        '💤 深夜/凌晨 (00-06)'
-    ];
-    
-    let maxVal = 0;
-    for (let r = 0; r < 4; r++) {
-        for (let c = 0; c < 7; c++) {
-            if (matrix[r][c] > maxVal) maxVal = matrix[r][c];
-        }
+
+    // Generate insights in the insight box
+    if (elements.profileHabitInsightText) {
+        const totalTokensUsed = tokenStats.reduce((sum, d) => sum + d.total_tokens, 0);
+        const avgTokens = Math.round(totalTokensUsed / (tokenStats.length || 1));
+        elements.profileHabitInsightText.innerHTML = `过去 7 天您共消耗了 <strong>${totalTokensUsed}</strong> 个 Token（平均每日 <strong>${avgTokens}</strong> 个），主要用于文章注意力评估与大模型摘要服务。`;
     }
-    if (maxVal === 0) maxVal = 1;
-    
-    const periodSums = [0, 0, 0, 0];
-    for (let r = 0; r < 4; r++) {
-        for (let c = 0; c < 7; c++) {
-            periodSums[r] += matrix[r][c];
-        }
-    }
-    
-    for (let r = 0; r < 4; r++) {
-        const row = document.createElement('div');
-        row.style.display = 'flex';
-        row.style.alignItems = 'center';
-        row.style.gap = '4px';
-        row.style.padding = '4px 0';
-        row.style.borderBottom = '1px solid rgba(255, 255, 255, 0.02)';
-        
-        const timeLabel = document.createElement('div');
-        timeLabel.style.width = '120px';
-        timeLabel.style.fontSize = '11px';
-        timeLabel.style.fontWeight = '500';
-        timeLabel.style.color = 'var(--text-secondary)';
-        timeLabel.textContent = periodLabels[r];
-        row.appendChild(timeLabel);
-        
-        const colsContainer = document.createElement('div');
-        colsContainer.style.display = 'flex';
-        colsContainer.style.gap = '4px';
-        colsContainer.style.flex = '1';
-        colsContainer.style.justifyContent = 'space-between';
-        
-        for (let c = 0; c < 7; c++) {
-            const count = matrix[r][c];
-            const cell = document.createElement('div');
-            cell.style.width = '35px';
-            cell.style.height = '24px';
-            cell.style.borderRadius = '3px';
-            
-            if (count === 0) {
-                cell.style.backgroundColor = 'rgba(255, 255, 255, 0.02)';
-                cell.style.border = '1px solid rgba(255, 255, 255, 0.03)';
-            } else {
-                const ratio = count / maxVal;
-                cell.style.backgroundColor = 'var(--accent-indigo, #6366f1)';
-                cell.style.opacity = 0.2 + ratio * 0.8;
-            }
-            
-            cell.title = `${dayLabels[c]} ${periodLabels[r].split(' ')[0]}\n阅读了 ${count} 篇文章`;
-            colsContainer.appendChild(cell);
-        }
-        row.appendChild(colsContainer);
-        elements.profileActivityHeatmap.appendChild(row);
-    }
+}
     
     let peakPeriod = 0;
     let maxPeriodVal = 0;
@@ -5451,6 +5490,9 @@ async function renderProfileHeatmap(topics) {
             return;
         }
         
+        // Find global max value to scale the heatmap opacity relatively across all topics
+        const globalMaxVal = Math.max(...validDetails.flatMap(d => d.weekly_trend.slice(8)), 1);
+        
         const headerRow = document.createElement('div');
         headerRow.style.display = 'flex';
         headerRow.style.alignItems = 'center';
@@ -5510,7 +5552,6 @@ async function renderProfileHeatmap(topics) {
             weeksContainer.style.justifyContent = 'space-between';
             
             const trendToShow = detail.weekly_trend.slice(8); // show last 4 weeks (indices 8, 9, 10, 11)
-            const maxVal = Math.max(...trendToShow, 1);
             trendToShow.forEach((count, i) => {
                 const cell = document.createElement('div');
                 cell.style.width = '45px';
@@ -5521,9 +5562,9 @@ async function renderProfileHeatmap(topics) {
                     cell.style.backgroundColor = 'rgba(255, 255, 255, 0.02)';
                     cell.style.border = '1px solid rgba(255, 255, 255, 0.03)';
                 } else {
-                    const ratio = count / maxVal;
+                    const ratio = count / globalMaxVal;
                     cell.style.backgroundColor = 'var(--accent-indigo, #6366f1)';
-                    cell.style.opacity = 0.2 + ratio * 0.8;
+                    cell.style.opacity = 0.15 + ratio * 0.85;
                 }
                 
                 cell.style.cursor = 'pointer';

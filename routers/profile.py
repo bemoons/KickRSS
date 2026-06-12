@@ -14,6 +14,7 @@ def get_interest_profile():
         return {"status": "disabled"}
         
     with db.get_db() as conn:
+        cursor = conn.cursor()
         latest = crud.get_latest_user_interest(conn)
         if not latest:
             return {
@@ -26,15 +27,19 @@ def get_interest_profile():
         except Exception:
             topics = {"high_interest": [], "low_interest": [], "concentration_note": None}
             
-        # Get activity timestamps (last 30 days)
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT recorded_at 
-            FROM engagement 
-            WHERE recorded_at IS NOT NULL AND datetime(recorded_at) >= datetime('now', '-30 days')
-        """)
-        activity_rows = cursor.fetchall()
-        activity_timestamps = [r[0] for r in activity_rows]
+        # Get token stats for the last 7 calendar days
+        import datetime
+        token_stats = []
+        today = datetime.date.today()
+        for i in range(6, -1, -1):
+            d = (today - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
+            cursor.execute("SELECT total_tokens FROM token_usage WHERE date = ?", (d,))
+            row = cursor.fetchone()
+            total_tokens = row[0] if row else 0
+            token_stats.append({
+                "date": d,
+                "total_tokens": total_tokens
+            })
         
         # Get category distribution
         cursor.execute("""
@@ -55,7 +60,7 @@ def get_interest_profile():
             "low_engagement": latest["low_engagement"],
             "topics": topics,
             "attention_guide": latest["prompt_text"],
-            "activity_timestamps": activity_timestamps,
+            "token_stats": token_stats,
             "category_distribution": category_distribution
         }
 

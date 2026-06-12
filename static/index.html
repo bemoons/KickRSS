@@ -630,20 +630,20 @@
                 <div id="profile-main-content" style="display: flex; flex-direction: column; gap: 15px;">
                     <!-- View Selector Toggle -->
                     <div class="view-toggle" style="display: flex; gap: 8px; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 8px; border: 1px solid var(--border-color);">
-                        <button id="profile-toggle-week" class="toggle-btn" style="flex: 1; font-size: 12px; font-weight: 600; padding: 8px; border: none; background: transparent; color: var(--text-muted); border-radius: 6px; cursor: pointer; transition: all 0.2s;">📅 阅读习惯</button>
+                        <button id="profile-toggle-week" class="toggle-btn" style="flex: 1; font-size: 12px; font-weight: 600; padding: 8px; border: none; background: transparent; color: var(--text-muted); border-radius: 6px; cursor: pointer; transition: all 0.2s;">📅 Token 统计</button>
                         <button id="profile-toggle-month" class="toggle-btn active" style="flex: 1; font-size: 12px; font-weight: 600; padding: 8px; border: none; background: var(--accent-indigo, #6366f1); color: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s;">📊 兴趣画像</button>
                     </div>
 
                     <!-- WEEK TAB CONTENT -->
                     <div id="profile-tab-week-content" class="hidden" style="display: flex; flex-direction: column; gap: 15px;">
                         <div>
-                            <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: var(--text-secondary);">📅 每日阅读习惯 (近30天)</h4>
+                            <h4 id="profile-habit-title" style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: var(--text-secondary);">🪙 一周每日 Token 消耗统计</h4>
                             <div style="padding: 15px; background: rgba(0,0,0,0.1); border-radius: 8px; border: 1px solid var(--border-color); overflow-x: auto;">
                                 <div id="profile-activity-heatmap" style="display: flex; flex-direction: column; gap: 6px; min-width: 480px;">
                                     <!-- Grid rows (time vs day) -->
                                 </div>
                                 <!-- Legend -->
-                                <div style="display: flex; justify-content: flex-end; align-items: center; gap: 4px; font-size: 10px; color: var(--text-secondary); margin-top: 8px;">
+                                <div id="profile-heatmap-legend" style="display: flex; justify-content: flex-end; align-items: center; gap: 4px; font-size: 10px; color: var(--text-secondary); margin-top: 8px;">
                                     <span>少</span>
                                     <div style="width: 10px; height: 10px; background: transparent; border: 1px solid var(--border-color);"></div>
                                     <div style="width: 10px; height: 10px; background: rgba(99,102,241,0.25);"></div>

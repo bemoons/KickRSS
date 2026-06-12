@@ -333,11 +333,14 @@ body.resizing .column-resizer.dragging {
     border-bottom: 2px solid var(--accent-indigo, #6366f1);
 }
 .feed-row .drag-handle {
-    margin-right: 6px;
+    padding: 6px 12px;
+    margin: -6px 0 -6px -12px;
     cursor: grab;
     opacity: 0.3;
     font-size: 14px;
     user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
     transition: opacity 0.2s;
 }
 .feed-row:hover .drag-handle {
@@ -353,6 +356,8 @@ body.resizing .column-resizer.dragging {
     border-radius: 8px;
     cursor: pointer;
     font-size: 14px;
+    user-select: none;
+    -webkit-user-select: none;
 }
 .feed-row:hover {
     background: rgba(255, 255, 255, 0.03);
