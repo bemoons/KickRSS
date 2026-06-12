@@ -1,5 +1,16 @@
 // Hook/override global fetch and EventSource to support frontend-backend decoupling (configurable backend URL) and session expiration
 (function() {
+    // Clean up bypass-sw parameter if present to keep URL clean after successful authentication
+    try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('bypass-sw')) {
+            url.searchParams.delete('bypass-sw');
+            window.history.replaceState({}, '', url.toString());
+        }
+    } catch (e) {
+        console.error('Failed to clean bypass-sw parameter:', e);
+    }
+
     const apiBase = window.localStorage.getItem('KICKRSS_API_BASE') || '';
     const originalFetch = window.fetch;
     window.fetch = async function(input, init) {
@@ -10,7 +21,10 @@
         try {
             const response = await originalFetch(fetchUrl, init);
             if (response.status === 401) {
-                window.location.reload();
+                // Redirect to main page with bypass-sw parameter to let browser handle basic auth prompt natively
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.set('bypass-sw', '1');
+                window.location.replace(currentUrl.toString());
             }
             return response;
         } catch (err) {

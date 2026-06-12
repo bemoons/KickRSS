@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kickrss-v2';
+const CACHE_NAME = 'kickrss-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -36,6 +36,11 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
 
   const url = new URL(e.request.url);
+
+  // Allow native browser basic auth flow to bypass Service Worker if requested
+  if (url.searchParams.has('bypass-sw')) {
+    return;
+  }
 
   // For API endpoints, we always fetch from network first to ensure fresh data
   // But fallback to cache if offline
