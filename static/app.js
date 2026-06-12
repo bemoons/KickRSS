@@ -56,7 +56,8 @@ const state = {
     // Reading profile state
     interestProfileEnabled: false,
     profileTrendView: 'week', // 'week' or 'month'
-    interestProfileData: null
+    interestProfileData: null,
+    backToFeedsFromDetail: false
 };
 
 let currentEngagement = null;
@@ -698,6 +699,10 @@ function initEventListeners() {
         elements.mobileBackToEntries.addEventListener('click', () => {
             submitCurrentEngagement();
             document.body.classList.remove('show-detail');
+            if (state.backToFeedsFromDetail) {
+                document.body.classList.remove('show-entries');
+                state.backToFeedsFromDetail = false;
+            }
             const detailCol = document.getElementById('detail-column');
             const chatSection = document.getElementById('chat-section');
             if (detailCol) detailCol.classList.remove('chat-open');
@@ -5287,6 +5292,8 @@ async function showTopicDetail(topicName) {
             
             artEl.addEventListener('click', () => {
                 hideAllModals();
+                state.backToFeedsFromDetail = true;
+                document.body.classList.add('show-entries');
                 selectEntry(art.entry_id);
             });
             
