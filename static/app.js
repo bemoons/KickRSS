@@ -196,7 +196,9 @@ const elements = {
     profileTabWeekContent: document.getElementById('profile-tab-week-content'),
     profileTabMonthContent: document.getElementById('profile-tab-month-content'),
     profileCategoryDistributionList: document.getElementById('profile-category-distribution-list'),
-    profileHeatmapLegend: document.getElementById('profile-heatmap-legend')
+    profileHeatmapLegend: document.getElementById('profile-heatmap-legend'),
+    profileActivityHeatmap: document.getElementById('profile-activity-heatmap'),
+    profileHabitInsightText: document.getElementById('profile-habit-insight-text')
 };
 
 // ----------------------------------------------------
