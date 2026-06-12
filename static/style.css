@@ -489,6 +489,7 @@ body.resizing .column-resizer.dragging {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
 }
 .header-subtitle {
     font-size: 11px;
@@ -2085,6 +2086,35 @@ input:checked + .feed-slider:before {
     }
     .manage-item-actions {
         justify-content: flex-end;
+    }
+    
+    /* Mobile Compact Header Fix to prevent long titles blocking buttons */
+    .panel-header {
+        padding: 8px 12px !important;
+        padding-top: calc(8px + env(safe-area-inset-top)) !important;
+    }
+    .header-nav {
+        gap: 8px !important;
+        margin-right: 8px !important;
+    }
+    .header-title {
+        font-size: 15px !important;
+    }
+    .btn-compact {
+        padding: 0 8px !important;
+        font-size: 10px !important;
+        height: 24px !important;
+    }
+    .toggle-container {
+        padding: 4px 8px !important;
+        gap: 6px !important;
+    }
+    .toggle-label {
+        font-size: 10px !important;
+    }
+    .switch {
+        transform: scale(0.85);
+        margin-right: 2px !important;
     }
 }
 
