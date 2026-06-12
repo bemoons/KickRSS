@@ -1,24 +1,31 @@
-// Hook/override global fetch and EventSource to support frontend-backend decoupling (configurable backend URL)
+// Hook/override global fetch and EventSource to support frontend-backend decoupling (configurable backend URL) and session expiration
 (function() {
     const apiBase = window.localStorage.getItem('KICKRSS_API_BASE') || '';
-    if (apiBase) {
-        const originalFetch = window.fetch;
-        window.fetch = function(input, init) {
-            if (typeof input === 'string' && input.startsWith('/')) {
-                input = apiBase + input;
+    const originalFetch = window.fetch;
+    window.fetch = async function(input, init) {
+        let fetchUrl = input;
+        if (apiBase && typeof input === 'string' && input.startsWith('/')) {
+            fetchUrl = apiBase + input;
+        }
+        try {
+            const response = await originalFetch(fetchUrl, init);
+            if (response.status === 401) {
+                window.location.reload();
             }
-            return originalFetch(input, init);
-        };
+            return response;
+        } catch (err) {
+            throw err;
+        }
+    };
 
-        const OriginalEventSource = window.EventSource;
-        window.EventSource = function(url, configuration) {
-            if (typeof url === 'string' && url.startsWith('/')) {
-                url = apiBase + url;
-            }
-            return new OriginalEventSource(url, configuration);
-        };
-        window.EventSource.prototype = OriginalEventSource.prototype;
-    }
+    const OriginalEventSource = window.EventSource;
+    window.EventSource = function(url, configuration) {
+        if (apiBase && typeof url === 'string' && url.startsWith('/')) {
+            url = apiBase + url;
+        }
+        return new OriginalEventSource(url, configuration);
+    };
+    window.EventSource.prototype = OriginalEventSource.prototype;
 })();
 
 // Global State Management
