@@ -403,7 +403,7 @@ def generate_summary_stream(
                     try:
                         data = json.loads(data_str)
                         delta = data["choices"][0]["delta"]
-                        if "content" in delta:
+                        if "content" in delta and delta["content"] is not None:
                             yield delta["content"]
                     except Exception:
                         pass
@@ -428,7 +428,9 @@ def parse_ai_summary_response(text: str) -> tuple[str, Optional[str]]:
             clickbait_note = note_val
             
     if rest.startswith("SUMMARY:"):
-        summary = rest.replace("SUMMARY:", "").strip()
+        summary = rest.replace("SUMMARY:", "", 1).strip()
+    elif rest.lstrip().startswith("SUMMARY:"):
+        summary = rest.lstrip().replace("SUMMARY:", "", 1).strip()
     else:
         # Fallback if AI didn't follow formatting perfectly
         summary = rest.strip() if rest else text.strip()
@@ -519,7 +521,7 @@ def generate_chat_response_stream(
                     try:
                         data = json.loads(data_str)
                         delta = data["choices"][0]["delta"]
-                        if "content" in delta:
+                        if "content" in delta and delta["content"] is not None:
                             yield delta["content"]
                     except Exception:
                         pass
