@@ -473,10 +473,14 @@ body.resizing .column-resizer.dragging {
     align-items: center;
     gap: 12px;
     overflow: hidden;
+    flex: 1;
+    min-width: 0;
+    margin-right: 16px;
 }
 .title-meta {
     display: flex;
     flex-direction: column;
+    min-width: 0;
 }
 .header-title {
     font-family: var(--font-title);
