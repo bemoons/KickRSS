@@ -5376,37 +5376,6 @@ function renderProfileTokenStats(tokenStats) {
         elements.profileHabitInsightText.innerHTML = `过去 7 天您共消耗了 <strong>${totalTokensUsed}</strong> 个 Token（平均每日 <strong>${avgTokens}</strong> 个），主要用于文章注意力评估与大模型摘要服务。`;
     }
 }
-    
-    let peakPeriod = 0;
-    let maxPeriodVal = 0;
-    for (let r = 0; r < 4; r++) {
-        if (periodSums[r] > maxPeriodVal) {
-            maxPeriodVal = periodSums[r];
-            peakPeriod = r;
-        }
-    }
-    
-    let habitText = '';
-    if (timestamps.length === 0) {
-        habitText = '暂无足够阅读活动记录。多看几篇新闻，你的每日阅读习惯就会出现在这里哦！';
-    } else {
-        if (peakPeriod === 3) {
-            habitText = '仙风道骨！统计发现你最常在【深夜/凌晨】看新闻。熬最深的夜，吃最烫的信息瓜，你是名副其实的“修仙党”——注意护肝哦！';
-        } else if (peakPeriod === 0) {
-            habitText = '晨光熹微，元气满满！你最习惯在【清晨/上午】开启阅读。用天下大事唤醒沉睡的细胞，自律程度拉满，今天也是充实的一天！';
-        } else if (peakPeriod === 1) {
-            habitText = '咖啡续命，摸鱼大师！你爱在【中午/下午】工作间隙刷新闻。这叫劳逸结合、科学放松，我们懂的（主编暗示：在偷偷偷懒吧？）。';
-        } else if (peakPeriod === 2) {
-            habitText = '日落西山，静享时光。你最钟爱在【傍晚/晚上】静心阅读。洗净一天的喧嚣与疲惫，慢慢品读这个世界，阅读体验极佳。';
-        } else {
-            habitText = '规律得像个机器人！你的阅读分布非常均匀，成功避开了所有极端的摸鱼或修仙时段。佩服佩服！';
-        }
-    }
-    
-    if (elements.profileHabitInsightText) {
-        elements.profileHabitInsightText.textContent = habitText;
-    }
-}
 
 function renderProfileCategoryDistribution(categoryDistribution) {
     if (!elements.profileCategoryDistributionList) return;
