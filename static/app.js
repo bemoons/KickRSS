@@ -345,6 +345,19 @@ function initEventListeners() {
     }
     
     // Global Search Input
+    function triggerSearch(val) {
+        state.activeView = 'search';
+        document.querySelectorAll('.feed-row').forEach(node => node.classList.remove('active'));
+        document.querySelectorAll('.category-row').forEach(node => node.classList.remove('active'));
+        if (elements.btnAllUnread) elements.btnAllUnread.classList.remove('active');
+        if (elements.btnStarred) elements.btnStarred.classList.remove('active');
+        if (elements.btnNotes) elements.btnNotes.classList.remove('active');
+        
+        if (elements.currentCategoryName) elements.currentCategoryName.textContent = `搜索: "${val}"`;
+        loadSearchEntries(val);
+        document.body.classList.add('show-entries'); // Navigate to entries list on mobile search
+    }
+
     if (elements.searchInput) {
         elements.searchInput.addEventListener('input', (e) => {
             const val = e.target.value.trim();
@@ -352,23 +365,30 @@ function initEventListeners() {
                 if (state.activeView === 'search') {
                     selectGlobalUnread();
                 }
-                return;
             }
-            
-            clearTimeout(window.searchTimeout);
-            window.searchTimeout = setTimeout(() => {
-                state.activeView = 'search';
-                document.querySelectorAll('.feed-row').forEach(node => node.classList.remove('active'));
-                document.querySelectorAll('.category-row').forEach(node => node.classList.remove('active'));
-                if (elements.btnAllUnread) elements.btnAllUnread.classList.remove('active');
-                if (elements.btnStarred) elements.btnStarred.classList.remove('active');
-                if (elements.btnNotes) elements.btnNotes.classList.remove('active');
-                
-                if (elements.currentCategoryName) elements.currentCategoryName.textContent = `搜索: "${val}"`;
-                loadSearchEntries(val);
-                document.body.classList.add('show-entries'); // Navigate to entries list on mobile search
-            }, 300);
         });
+
+        elements.searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const val = elements.searchInput.value.trim();
+                if (val !== '') {
+                    elements.searchInput.blur();
+                    triggerSearch(val);
+                }
+            }
+        });
+
+        const searchIcon = document.querySelector('.search-icon');
+        if (searchIcon) {
+            searchIcon.style.cursor = 'pointer';
+            searchIcon.addEventListener('click', () => {
+                const val = elements.searchInput.value.trim();
+                if (val !== '') {
+                    elements.searchInput.blur();
+                    triggerSearch(val);
+                }
+            });
+        }
     }
     
     // Quick Links
