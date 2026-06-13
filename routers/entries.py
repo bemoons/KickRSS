@@ -77,6 +77,7 @@ def search_entries(
             result.append(d)
         return result
 
+
 @router.get("/entries/{entry_id}/fulltext")
 def get_entry_fulltext(entry_id: int):
     return entry_service.get_entry_fulltext(entry_id)
@@ -243,3 +244,22 @@ def delete_entry_chat(entry_id: int):
     with db.get_db() as conn:
         crud.delete_entry_chat_history(conn, entry_id)
         return {"ok": True}
+
+@router.get("/entries/{entry_id}")
+def get_entry_details(entry_id: int):
+    with db.get_db() as conn:
+        row = crud.get_entry_by_id(conn, entry_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Entry not found")
+        d = dict(row)
+        feed = crud.get_feed_by_id(conn, d["feed_id"])
+        d["feed_title"] = feed["title"] if feed else "Unknown"
+        if d.get("category_id"):
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM categories WHERE id = ?", (d["category_id"],))
+            cat_row = cursor.fetchone()
+            d["category_name"] = cat_row[0] if cat_row else ""
+        else:
+            d["category_name"] = ""
+        return d
+

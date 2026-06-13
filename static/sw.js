@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kickrss-v2';
+const CACHE_NAME = 'kickrss-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -32,59 +32,7 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  // We only cache GET requests
-  if (e.request.method !== 'GET') return;
-
-  const url = new URL(e.request.url);
-
-  // For API endpoints, we always fetch from network first to ensure fresh data
-  // But fallback to cache if offline
-  if (url.pathname.startsWith('/feeds') || 
-      url.pathname.startsWith('/entries') || 
-      url.pathname.startsWith('/categories') || 
-      url.pathname.startsWith('/search')) {
-    e.respondWith(
-      fetch(e.request).then((networkResponse) => {
-        if (networkResponse.redirected) {
-          // If the API call gets redirected (e.g. to a login page because credentials expired),
-          // return a clean 401 response so the browser/frontend handles it cleanly.
-          return new Response('Unauthorized', {
-            status: 401,
-            statusText: 'Unauthorized'
-          });
-        }
-        return networkResponse;
-      }).catch(() => {
-        return caches.match(e.request);
-      })
-    );
-    return;
-  }
-
-  // For static assets, we use Stale-While-Revalidate
-  e.respondWith(
-    caches.match(e.request).then((cachedResponse) => {
-      const fetchPromise = fetch(e.request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(e.request, networkResponse.clone());
-          });
-        }
-        if (networkResponse && networkResponse.redirected) {
-          if (e.request.mode === 'navigate') {
-            // For navigation requests, return a clean HTML response with a redirect script
-            // to strip Safari's internal redirect metadata and trigger client-side navigation.
-            return new Response(
-              `<script>window.location.replace("${networkResponse.url}");</script>`,
-              { headers: { 'Content-Type': 'text/html' } }
-            );
-          }
-        }
-        return networkResponse;
-      }).catch(() => {
-        // Ignore network errors during background update
-      });
-      return cachedResponse || fetchPromise;
-    })
-  );
+  // Bypass Service Worker interception to ensure Safari PWA/WebClip native network stack handles Nginx Basic Auth correctly.
+  // WebKit Service Worker fetch implementation has a known bug where it fails to forward Basic Auth credentials to the network.
+  return;
 });
