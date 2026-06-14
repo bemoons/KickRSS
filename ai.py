@@ -51,14 +51,14 @@ def call_chat_completion(
         
     try:
         try:
-            with httpx.Client(timeout=30.0) as client:
+            with httpx.Client(timeout=120.0) as client:
                 response = client.post(url, headers=headers, json=payload)
             
             # Fallback if JSON mode is not supported by the endpoint (e.g. returns 400 Bad Request)
             if response.status_code == 400 and response_format_json:
                 logger.warning("Endpoint returned 400; retrying without response_format='json_object'")
                 payload.pop("response_format", None)
-                with httpx.Client(timeout=30.0) as client:
+                with httpx.Client(timeout=120.0) as client:
                     response = client.post(url, headers=headers, json=payload)
             
             response.raise_for_status()
@@ -66,13 +66,14 @@ def call_chat_completion(
             if response_format_json:
                 logger.warning(f"Initial request failed with {initial_err}; retrying without response_format='json_object'")
                 payload.pop("response_format", None)
-                with httpx.Client(timeout=30.0) as client:
+                with httpx.Client(timeout=120.0) as client:
                     response = client.post(url, headers=headers, json=payload)
                 response.raise_for_status()
             else:
                 raise
                 
         result_json = response.json()
+        logger.info(f"AI response: {result_json}")
         usage = result_json.get("usage")
         if usage:
             try:
@@ -87,7 +88,22 @@ def call_chat_completion(
                     )
             except Exception as usage_err:
                 logger.error(f"Failed to record token usage: {usage_err}")
-        return result_json["choices"][0]["message"]["content"]
+        message = result_json["choices"][0]["message"]
+        content = message.get("content") or ""
+        reasoning = message.get("reasoning_content") or ""
+        
+        # If content is empty, check if reasoning contains SUMMARY:
+        if not content.strip() and reasoning.strip():
+            if "SUMMARY:" in reasoning:
+                # Extract SUMMARY: from reasoning
+                _, summary = parse_ai_summary_response(reasoning)
+                if summary:
+                    content = summary
+            else:
+                # Fallback: use reasoning as-is
+                content = reasoning
+        
+        return content
     except Exception as e:
         logger.error(f"Error calling AI completions API at {url}: {e}", exc_info=True)
         raise
@@ -325,6 +341,7 @@ def get_summary_messages(
         "Your task is to:\n"
         "1. Verify if the title is misleading or clickbait compared to the actual content.\n"
         f"2. Generate a {length_desc}.\n\n"
+        "IMPORTANT: Do NOT output any thinking process or reasoning. Output ONLY the final answer.\n\n"
         "Rules:\n"
         f"- {rule_desc}\n"
         "- If the content is empty or contains no text, reply exactly with: \"NO_CONTENT\"\n"
@@ -363,9 +380,17 @@ def generate_summary_sync(
     length: Optional[str] = None,
     summary_lang: Optional[str] = None
 ) -> str:
+    logger.info(f"generate_summary_sync called for title: {title[:50]}")
     config = settings.get_ai_config("summary", summary_length=length)
     messages = get_summary_messages(title, url, content, length=length, summary_lang=summary_lang)
-    return call_chat_completion(config, messages, response_format_json=False)
+    logger.info(f"Calling chat completion with model {config['model']}")
+    result = call_chat_completion(config, messages, response_format_json=False)
+    # If result contains SUMMARY:, extract it
+    if "SUMMARY:" in result:
+        summary, clickbait = parse_ai_summary_response(result)
+        result = summary
+    logger.info(f"generate_summary_sync returned {len(result)} chars")
+    return result
 
 def generate_summary_stream(
     title: str, 
@@ -393,20 +418,39 @@ def generate_summary_stream(
         payload["max_tokens"] = config["max_tokens"]
         
     try:
-        with httpx.stream("POST", url_endpoint, headers=headers, json=payload, timeout=30.0) as response:
+        logger.info(f"Starting stream summary request to {url_endpoint} with model {config['model']}")
+        with httpx.stream("POST", url_endpoint, headers=headers, json=payload, timeout=120.0) as response:
             response.raise_for_status()
+            chunk_count = 0
+            buffer = ""
+            in_summary = False
             for line in response.iter_lines():
-                if line.startswith("data:"):
-                    data_str = line[5:].strip()
-                    if data_str == "[DONE]":
-                        break
-                    try:
-                        data = json.loads(data_str)
-                        delta = data["choices"][0]["delta"]
-                        if "content" in delta and delta["content"] is not None:
-                            yield delta["content"]
-                    except Exception:
-                        pass
+                if not line.startswith("data:"):
+                    continue
+                data_str = line[5:].strip()
+                if data_str == "[DONE]":
+                    logger.info(f"Stream summary received [DONE] after {chunk_count} chunks")
+                    break
+                try:
+                    data = json.loads(data_str)
+                    delta = data["choices"][0]["delta"]
+                    # Get content or reasoning_content
+                    text = delta.get("content") or delta.get("reasoning_content")
+                    if text is not None:
+                        buffer += text
+                        # Check if SUMMARY: appears
+                        if not in_summary and "SUMMARY:" in buffer:
+                            # Extract everything after SUMMARY:
+                            parts = buffer.split("SUMMARY:", 1)
+                            buffer = parts[1].strip()
+                            in_summary = True
+                        # If in_summary, yield the text
+                        if in_summary:
+                            chunk_count += 1
+                            yield text
+                except Exception as parse_err:
+                    logger.debug(f"Stream parse error: {parse_err}")
+            logger.info(f"Stream summary completed with {chunk_count} chunks")
     except Exception as e:
         logger.error(f"Error in stream summary: {e}", exc_info=True)
         raise
@@ -418,21 +462,32 @@ def parse_ai_summary_response(text: str) -> tuple[str, Optional[str]]:
     clickbait_note = None
     summary = ""
     
-    lines = text.split("\n", 1)
-    first_line = lines[0] if len(lines) > 0 else ""
-    rest = lines[1] if len(lines) > 1 else ""
-    
-    if first_line.startswith("CLICKBAIT_NOTE:"):
-        note_val = first_line.replace("CLICKBAIT_NOTE:", "").strip()
-        if note_val.upper() != "NONE" and note_val:
-            clickbait_note = note_val
-            
-    if rest.startswith("SUMMARY:"):
-        summary = rest.replace("SUMMARY:", "", 1).strip()
-    elif rest.lstrip().startswith("SUMMARY:"):
-        summary = rest.lstrip().replace("SUMMARY:", "", 1).strip()
+    # Check if SUMMARY: exists in the text
+    if "SUMMARY:" in text:
+        # Split by SUMMARY: and take everything after it
+        parts = text.split("SUMMARY:", 1)
+        before = parts[0].strip()
+        after = parts[1].strip()
+        
+        # Check for CLICKBAIT_NOTE in the part before SUMMARY:
+        if "CLICKBAIT_NOTE:" in before:
+            note_val = before.split("CLICKBAIT_NOTE:", 1)[1].strip()
+            if note_val.upper() != "NONE" and note_val:
+                clickbait_note = note_val
+        
+        summary = after
     else:
-        # Fallback if AI didn't follow formatting perfectly
+        # Fallback: try to extract from first line
+        lines = text.split("\n", 1)
+        first_line = lines[0] if len(lines) > 0 else ""
+        rest = lines[1] if len(lines) > 1 else ""
+        
+        if first_line.startswith("CLICKBAIT_NOTE:"):
+            note_val = first_line.replace("CLICKBAIT_NOTE:", "").strip()
+            if note_val.upper() != "NONE" and note_val:
+                clickbait_note = note_val
+        
+        # If no SUMMARY: found, use the rest as summary
         summary = rest.strip() if rest else text.strip()
         
     return summary, clickbait_note
@@ -521,6 +576,9 @@ def generate_chat_response_stream(
                     try:
                         data = json.loads(data_str)
                         delta = data["choices"][0]["delta"]
+                        # Ignore reasoning_content (internal thinking)
+                        if "reasoning_content" in delta:
+                            continue
                         if "content" in delta and delta["content"] is not None:
                             yield delta["content"]
                     except Exception:

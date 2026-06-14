@@ -19,6 +19,9 @@ def generate_stream_summary(entry_id: int, title: str, url: str, ft_text: str, d
         accumulated_summary = ""
         
         for chunk in ai_stream:
+            # Skip empty chunks
+            if not chunk:
+                continue
             buffer += chunk
             
             if not in_summary:
@@ -48,8 +51,28 @@ def generate_stream_summary(entry_id: int, title: str, url: str, ft_text: str, d
                         if note_val.upper() != "NONE" and note_val:
                             clickbait_note = note_val
                             yield f"data: {json.dumps({'summary': '', 'clickbait_note': clickbait_note, 'status': 'streaming'}, ensure_ascii=False)}\n\n"
-                    buffer = rest
-                elif len(buffer) >= 250:
+                        # After extracting clickbait note, treat the rest as summary
+                        in_summary = True
+                        if rest.strip():
+                            yield f"data: {json.dumps({'summary': rest.strip(), 'clickbait_note': None, 'status': 'streaming'}, ensure_ascii=False)}\n\n"
+                            accumulated_summary += rest.strip()
+                        buffer = ""
+                    elif clickbait_note is not None:
+                        # Already have clickbait note; treat content as summary
+                        in_summary = True
+                        if buffer.strip():
+                            yield f"data: {json.dumps({'summary': buffer.strip(), 'clickbait_note': None, 'status': 'streaming'}, ensure_ascii=False)}\n\n"
+                            accumulated_summary += buffer.strip()
+                        buffer = ""
+                    elif len(buffer) >= 10:
+                        # No structured headers and enough content: treat as summary
+                        in_summary = True
+                        yield f"data: {json.dumps({'summary': buffer, 'clickbait_note': None, 'status': 'streaming'}, ensure_ascii=False)}\n\n"
+                        accumulated_summary += buffer
+                        buffer = ""
+                    else:
+                        buffer = rest
+                elif len(buffer) >= 30:
                     in_summary = True
                     yield f"data: {json.dumps({'summary': buffer, 'clickbait_note': None, 'status': 'streaming'}, ensure_ascii=False)}\n\n"
                     accumulated_summary += buffer
