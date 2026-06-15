@@ -2,7 +2,7 @@
   "name": "KickRSS",
   "short_name": "KickRSS",
   "description": "AI-powered RSS reader for information completionists",
-  "start_url": "./index.html",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#0a0b10",
   "theme_color": "#6366f1",

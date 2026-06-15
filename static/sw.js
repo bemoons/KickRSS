@@ -1,7 +1,6 @@
-const CACHE_NAME = 'kickrss-v4';
+const CACHE_NAME = 'kickrss-v5';
 const ASSETS_TO_CACHE = [
   './',
-  './index.html',
   './style.css',
   './app.js',
   './manifest.json',
@@ -89,9 +88,11 @@ self.addEventListener('fetch', (e) => {
 
 // Helper to strip redirected flag from a Response object (WebKit/Safari requirement)
 function cleanRedirectedResponse(response) {
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers
+  return response.blob().then((blob) => {
+    return new Response(blob, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers
+    });
   });
 }
