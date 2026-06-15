@@ -29,11 +29,12 @@
         try {
             const response = await originalFetch(fetchUrl, init);
             if (response.status === 401) {
-                // Redirect to main page with bypass-sw and cache-busting timestamp parameter to let browser handle basic auth prompt natively without cache loops
-                const currentUrl = new URL(window.location.href);
-                currentUrl.searchParams.set('bypass-sw', '1');
-                currentUrl.searchParams.set('_t', Date.now().toString());
-                window.location.replace(currentUrl.toString());
+                const url = typeof input === 'string' ? input : (input.url || '');
+                if (!url.includes('/login')) {
+                    if (window.showPasswordGate) {
+                        window.showPasswordGate();
+                    }
+                }
             }
             return response;
         } catch (err) {
@@ -5689,3 +5690,161 @@ async function renderProfileHeatmap(topics) {
         elements.profileHeatmapContainer.innerHTML = '<div style="color:var(--text-muted); font-size:11px; text-align:center; padding: 10px;">趋势热力图加载失败</div>';
     }
 }
+
+// Global Password Gate Overlay
+let isPasswordGateOpen = false;
+
+window.showPasswordGate = function() {
+    if (isPasswordGateOpen) return;
+    isPasswordGateOpen = true;
+
+    // Remove any existing password gate overlay
+    const existing = document.getElementById('password-gate-overlay');
+    if (existing) existing.remove();
+
+    // Inject CSS styles dynamically
+    if (!document.getElementById('password-gate-styles')) {
+        const style = document.createElement('style');
+        style.id = 'password-gate-styles';
+        style.innerHTML = `
+            #password-gate-overlay {
+                position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+                background: rgba(10, 11, 18, 0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+                display: flex; justify-content: center; align-items: center; z-index: 999999;
+                opacity: 0; transition: opacity 0.3s ease;
+            }
+            #password-gate-overlay.show { opacity: 1; }
+            #password-gate-card {
+                background: rgba(20, 22, 37, 0.9); border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 16px; padding: 35px 30px; width: 90%; max-width: 400px;
+                box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4), 0 0 100px rgba(99, 102, 241, 0.15);
+                text-align: center; transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            }
+            #password-gate-overlay.show #password-gate-card { transform: scale(1); }
+            .password-gate-icon {
+                width: 64px; height: 64px; background: rgba(99, 102, 241, 0.15); border-radius: 50%;
+                display: flex; justify-content: center; align-items: center; margin: 0 auto 20px;
+                color: #6366f1; font-size: 28px; box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
+            }
+            .password-gate-title { font-size: 20px; font-weight: 600; color: #ffffff; margin-bottom: 10px; }
+            .password-gate-subtitle { font-size: 13px; color: #9ca3af; margin-bottom: 25px; line-height: 1.4; }
+            .password-gate-input-wrapper { position: relative; margin-bottom: 20px; }
+            .password-gate-input {
+                width: 100%; padding: 12px 16px; background: rgba(10, 11, 18, 0.6);
+                border: 1.5px solid rgba(255, 255, 255, 0.1); border-radius: 10px;
+                color: #ffffff; font-size: 15px; outline: none; box-sizing: border-box;
+                transition: border-color 0.2s, box-shadow 0.2s;
+            }
+            .password-gate-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25); }
+            .password-gate-btn {
+                width: 100%; padding: 12px; background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+                border: none; border-radius: 10px; color: #ffffff; font-size: 15px; font-weight: 600;
+                cursor: pointer; transition: opacity 0.2s, transform 0.1s; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+            }
+            .password-gate-btn:hover { opacity: 0.95; }
+            .password-gate-btn:active { transform: scale(0.98); }
+            .password-gate-error { color: #ef4444; font-size: 13px; margin-top: 10px; height: 18px; opacity: 0; transition: opacity 0.2s; }
+            .password-gate-error.show { opacity: 1; }
+            @keyframes password-shake {
+                0%, 100% { transform: translateX(0); }
+                20%, 60% { transform: translateX(-8px); }
+                40%, 80% { transform: translateX(8px); }
+            }
+            .password-shake-animation { animation: password-shake 0.4s ease-in-out; }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // Create DOM structure
+    const overlay = document.createElement('div');
+    overlay.id = 'password-gate-overlay';
+    
+    const isEn = state.systemLang === 'en';
+    const title = isEn ? "Access Password Required" : "输入访问密码";
+    const subtitle = isEn 
+        ? "This KickRSS reader is protected. Please enter the password to unlock your feeds and LLM services." 
+        : "此 KickRSS 服务受安全保护，请输入访问密码以解锁订阅源及 AI 资产。";
+    const placeholder = isEn ? "Password" : "访问密码";
+    const btnText = isEn ? "Unlock" : "解锁";
+
+    overlay.innerHTML = `
+        <div id="password-gate-card">
+            <div class="password-gate-icon">🔒</div>
+            <div class="password-gate-title">${title}</div>
+            <div class="password-gate-subtitle">${subtitle}</div>
+            <div class="password-gate-input-wrapper">
+                <input type="password" id="password-gate-input-field" class="password-gate-input" placeholder="${placeholder}" autofocus />
+            </div>
+            <button id="password-gate-submit-btn" class="password-gate-btn">${btnText}</button>
+            <div id="password-gate-err-msg" class="password-gate-error"></div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // Force layout reflow and add show class
+    setTimeout(() => overlay.classList.add('show'), 50);
+
+    const inputField = document.getElementById('password-gate-input-field');
+    const submitBtn = document.getElementById('password-gate-submit-btn');
+    const errMsg = document.getElementById('password-gate-err-msg');
+    const card = document.getElementById('password-gate-card');
+
+    inputField.focus();
+
+    async function handleUnlock() {
+        const password = inputField.value;
+        if (!password) {
+            inputField.focus();
+            return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = isEn ? "Verifying..." : "正在验证...";
+        errMsg.classList.remove('show');
+
+        try {
+            const response = await window.fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ password })
+            });
+
+            if (response.ok) {
+                // Remove overlay and reset flag
+                overlay.classList.remove('show');
+                setTimeout(() => {
+                    overlay.remove();
+                    isPasswordGateOpen = false;
+                }, 300);
+
+                // Reload the app settings and data
+                loadSettingsOnStartup().then(() => {
+                    loadFeeds();
+                    selectGlobalUnread(true);
+                });
+            } else {
+                throw new Error("Incorrect password");
+            }
+        } catch (e) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = btnText;
+            errMsg.textContent = isEn ? "Incorrect password, please try again." : "密码错误，请重试";
+            errMsg.classList.add('show');
+            
+            // Trigger shake animation
+            card.classList.remove('password-shake-animation');
+            void card.offsetWidth; // trigger reflow
+            card.classList.add('password-shake-animation');
+            inputField.value = '';
+            inputField.focus();
+        }
+    }
+
+    submitBtn.addEventListener('click', handleUnlock);
+    inputField.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleUnlock();
+    });
+};

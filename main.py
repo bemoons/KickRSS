@@ -55,12 +55,98 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import hmac
+import hashlib
+import time
+from pydantic import BaseModel
+from fastapi import Request, Response
+from fastapi.responses import JSONResponse
+
+# Session Token Helpers
+def get_signing_key(password: str) -> bytes:
+    return hashlib.sha256(password.encode('utf-8')).digest()
+
+def generate_session_token(password: str) -> str:
+    payload = str(int(time.time()))
+    key = get_signing_key(password)
+    sig = hmac.new(key, payload.encode('utf-8'), hashlib.sha256).hexdigest()
+    return f"{payload}.{sig}"
+
+def verify_session_token(token: str, password: str) -> bool:
+    try:
+        parts = token.split(".", 1)
+        if len(parts) != 2:
+            return False
+        payload, sig = parts
+        key = get_signing_key(password)
+        expected_sig = hmac.new(key, payload.encode('utf-8'), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected_sig):
+            return False
+        timestamp = int(payload)
+        if time.time() - timestamp > 7776000:  # 90 days
+            return False
+        return True
+    except Exception:
+        return False
+
+class LoginRequest(BaseModel):
+    password: str
+
 # Mount APIRouter instances
 app.include_router(feeds_router, tags=["feeds"])
 app.include_router(categories_router, tags=["categories"])
 app.include_router(entries_router, tags=["entries"])
 app.include_router(profile_router, tags=["profile"])
 app.include_router(settings_router, tags=["settings"])
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    if not settings.access_password:
+        return await call_next(request)
+        
+    path = request.url.path
+    protected_prefixes = [
+        "/feeds", "/categories", "/entries", "/profile", "/settings", "/refresh", "/maintenance"
+    ]
+    
+    is_protected = False
+    for prefix in protected_prefixes:
+        if path == prefix or path.startswith(prefix + "/"):
+            is_protected = True
+            break
+            
+    if is_protected:
+        session_token = request.cookies.get("kickrss_session")
+        if not session_token or not verify_session_token(session_token, settings.access_password):
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Authentication required"}
+            )
+            
+    return await call_next(request)
+
+@app.post("/login", tags=["auth"])
+def login(data: LoginRequest, response: Response):
+    if not settings.access_password:
+        return {"ok": True, "message": "Auth not enabled"}
+    if data.password == settings.access_password:
+        token = generate_session_token(settings.access_password)
+        response.set_cookie(
+            key="kickrss_session",
+            value=token,
+            max_age=7776000,  # 90 days
+            httponly=True,
+            path="/",
+            samesite="lax",
+            secure=False
+        )
+        return {"ok": True}
+    return JSONResponse(status_code=401, content={"detail": "Incorrect password"})
+
+@app.post("/logout", tags=["auth"])
+def logout(response: Response):
+    response.delete_cookie(key="kickrss_session", path="/")
+    return {"ok": True}
 
 @app.get("/healthz", tags=["health"])
 def healthz():
