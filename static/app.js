@@ -171,6 +171,7 @@ const elements = {
     
     // Settings inputs
     settingApiBase: document.getElementById('setting-api-base'),
+    settingAccessPassword: document.getElementById('setting-access-password'),
     settingFetchInterval: document.getElementById('setting-fetch-interval'),
     settingMinTextChars: document.getElementById('setting-min-text-chars'),
     settingAiUrl: document.getElementById('setting-ai-url'),
@@ -3702,6 +3703,7 @@ async function loadAndRenderSystemSettings() {
         }
         
         if (elements.settingApiBase) elements.settingApiBase.value = localStorage.getItem('KICKRSS_API_BASE') || '';
+        if (elements.settingAccessPassword) elements.settingAccessPassword.value = settingsData.access_password || '';
         if (elements.settingFetchInterval) elements.settingFetchInterval.value = settingsData.fetch_interval_minutes;
         if (elements.settingMinTextChars) elements.settingMinTextChars.value = settingsData.min_text_chars;
         if (elements.settingPromoteThreshold) elements.settingPromoteThreshold.value = settingsData.promote_threshold;
@@ -3768,7 +3770,8 @@ async function saveSystemSettings(e) {
         chat_api_key: elements.settingChatKey ? elements.settingChatKey.value.trim() : "",
         chat_model: elements.settingChatModel ? elements.settingChatModel.value.trim() : "",
         chat_max_tokens: (elements.settingChatTokens && elements.settingChatTokens.value) ? parseInt(elements.settingChatTokens.value) : null,
-        interest_profile_enabled: elements.settingInterestProfileEnabled ? elements.settingInterestProfileEnabled.checked : false
+        interest_profile_enabled: elements.settingInterestProfileEnabled ? elements.settingInterestProfileEnabled.checked : false,
+        access_password: elements.settingAccessPassword ? elements.settingAccessPassword.value.trim() : ""
     };
     
     try {

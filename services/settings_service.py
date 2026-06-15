@@ -31,7 +31,8 @@ def get_settings() -> Dict[str, Any]:
         "chat_base_url": chat_cfg.get("base_url") or "",
         "chat_api_key": chat_cfg.get("api_key") or "",
         "chat_model": chat_cfg.get("model") or "",
-        "chat_max_tokens": chat_cfg.get("max_tokens") or 1200
+        "chat_max_tokens": chat_cfg.get("max_tokens") or 1200,
+        "access_password": settings.data.get("access_password", "")
     }
 
 def update_settings(
@@ -51,7 +52,8 @@ def update_settings(
     chat_api_key: Optional[str] = None,
     chat_model: Optional[str] = None,
     chat_max_tokens: Optional[int] = None,
-    interest_profile_enabled: Optional[bool] = None
+    interest_profile_enabled: Optional[bool] = None,
+    access_password: Optional[str] = None
 ) -> Dict[str, Any]:
     if "ai" not in settings.data:
         settings.data["ai"] = {}
@@ -120,6 +122,9 @@ def update_settings(
         
     if interest_profile_enabled is not None:
         settings.data["interest_profile_enabled"] = interest_profile_enabled
+        
+    if access_password is not None:
+        settings.data["access_password"] = access_password.strip()
         
     settings.save()
     return get_settings()

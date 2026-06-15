@@ -25,6 +25,7 @@ class SettingsUpdate(BaseModel):
     ai_summary_lang: Optional[str] = None
     system_lang: Optional[str] = None
     interest_profile_enabled: Optional[bool] = None
+    access_password: Optional[str] = None
 
 @router.get("/settings")
 def get_settings():
@@ -49,7 +50,8 @@ def update_settings(update: SettingsUpdate):
         chat_api_key=update.chat_api_key,
         chat_model=update.chat_model,
         chat_max_tokens=update.chat_max_tokens,
-        interest_profile_enabled=update.interest_profile_enabled
+        interest_profile_enabled=update.interest_profile_enabled,
+        access_password=update.access_password
     )
 
 class TestLLMRequest(BaseModel):
