@@ -1,6 +1,5 @@
-const CACHE_NAME = 'kickrss-v5';
+const CACHE_NAME = 'kickrss-v6';
 const ASSETS_TO_CACHE = [
-  './',
   './style.css',
   './app.js',
   './manifest.json',
@@ -31,14 +30,15 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
+  // 1. Bypass Service Worker entirely for navigation requests to prevent WebKit redirection/cross-origin crashes
+  if (e.request.mode === 'navigate') {
+    return;
+  }
+
   const url = new URL(e.request.url);
   
-  // Normalize paths to check if they match our cached static assets
-  const cleanPath = url.pathname.endsWith('/') ? url.pathname : url.pathname + '/';
-  const isRoot = url.pathname === '/' || url.pathname === '/index.html' || cleanPath === self.location.pathname;
-  
-  const isStaticAsset = isRoot || ASSETS_TO_CACHE.some(asset => {
-    if (asset === './' || asset === '.') return false;
+  // 2. Check if the request is for a cached static asset
+  const isStaticAsset = ASSETS_TO_CACHE.some(asset => {
     const assetUrl = new URL(asset, self.location.href);
     return url.pathname === assetUrl.pathname;
   });
@@ -54,28 +54,9 @@ self.addEventListener('fetch', (e) => {
           return cachedResponse;
         }
         
-        // Fetch from network with follow redirect option for navigation
-        const fetchRequest = (e.request.mode === 'navigate')
-          ? new Request(e.request, { redirect: 'follow' })
-          : e.request;
-
-        return fetch(fetchRequest).then((networkResponse) => {
-          const isRedirected = networkResponse.redirected || 
-                               networkResponse.type === 'opaqueredirect' || 
-                               (networkResponse.status >= 300 && networkResponse.status < 400);
-
-          if (isRedirected) {
-            if (e.request.mode === 'navigate') {
-              // Navigation requests: redirect client-side to strip Safari redirection metadata
-              const redirectUrl = networkResponse.url || e.request.url;
-              return new Response(
-                `<script>window.location.replace("${redirectUrl}");</script>`,
-                { headers: { 'Content-Type': 'text/html' } }
-              );
-            } else {
-              // Static asset requests: clean it
-              return cleanRedirectedResponse(networkResponse);
-            }
+        return fetch(e.request).then((networkResponse) => {
+          if (networkResponse.redirected) {
+            return cleanRedirectedResponse(networkResponse);
           }
           return networkResponse;
         }).catch(() => {
@@ -88,11 +69,9 @@ self.addEventListener('fetch', (e) => {
 
 // Helper to strip redirected flag from a Response object (WebKit/Safari requirement)
 function cleanRedirectedResponse(response) {
-  return response.blob().then((blob) => {
-    return new Response(blob, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers
-    });
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers
   });
 }
