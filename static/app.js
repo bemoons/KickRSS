@@ -54,6 +54,7 @@
 
 // Global State Management
 const state = {
+    currentAccessPassword: '',
     feeds: [],
     selectedFeedId: null,
     selectedCategoryId: null,
@@ -171,7 +172,11 @@ const elements = {
     
     // Settings inputs
     settingApiBase: document.getElementById('setting-api-base'),
-    settingAccessPassword: document.getElementById('setting-access-password'),
+    settingEnableAuth: document.getElementById('setting-enable-auth'),
+    settingBtnChangePassword: document.getElementById('setting-btn-change-password'),
+    settingOldPassword: document.getElementById('setting-old-password'),
+    settingNewPassword: document.getElementById('setting-new-password'),
+    settingConfirmPassword: document.getElementById('setting-confirm-password'),
     settingFetchInterval: document.getElementById('setting-fetch-interval'),
     settingMinTextChars: document.getElementById('setting-min-text-chars'),
     settingAiUrl: document.getElementById('setting-ai-url'),
@@ -557,6 +562,68 @@ function initEventListeners() {
     }
     if (elements.settingsSaveBtn) {
         elements.settingsSaveBtn.addEventListener('click', saveSystemSettings);
+    }
+    if (elements.settingEnableAuth) {
+        elements.settingEnableAuth.addEventListener('change', (e) => {
+            const hasPassword = !!state.currentAccessPassword;
+            const isChecked = e.target.checked;
+            const container = document.getElementById('password-fields-container');
+            const changeBtn = elements.settingBtnChangePassword;
+            const oldPwGroup = document.getElementById('old-password-group');
+            const newPwGroup = document.getElementById('new-password-group');
+            const confirmPwGroup = document.getElementById('confirm-password-group');
+            
+            if (isChecked) {
+                if (hasPassword) {
+                    if (container) container.style.display = 'none';
+                    if (changeBtn) changeBtn.style.display = 'inline-block';
+                } else {
+                    if (container) container.style.display = 'flex';
+                    if (changeBtn) changeBtn.style.display = 'none';
+                    if (oldPwGroup) oldPwGroup.style.display = 'none';
+                    if (newPwGroup) newPwGroup.style.display = 'block';
+                    if (confirmPwGroup) confirmPwGroup.style.display = 'block';
+                }
+            } else {
+                if (hasPassword) {
+                    if (container) container.style.display = 'flex';
+                    if (oldPwGroup) oldPwGroup.style.display = 'block';
+                    if (newPwGroup) newPwGroup.style.display = 'none';
+                    if (confirmPwGroup) confirmPwGroup.style.display = 'none';
+                    if (changeBtn) changeBtn.style.display = 'none';
+                    
+                    const lang = state.systemLang || 'zh';
+                    const slOldPw = document.getElementById('setting-label-old-password');
+                    if (slOldPw) slOldPw.textContent = TRANSLATIONS[lang]["setting_label_old_password_disable"];
+                } else {
+                    if (container) container.style.display = 'none';
+                    if (changeBtn) changeBtn.style.display = 'none';
+                }
+            }
+        });
+    }
+    if (elements.settingBtnChangePassword) {
+        elements.settingBtnChangePassword.addEventListener('click', () => {
+            const container = document.getElementById('password-fields-container');
+            const oldPwGroup = document.getElementById('old-password-group');
+            const newPwGroup = document.getElementById('new-password-group');
+            const confirmPwGroup = document.getElementById('confirm-password-group');
+            
+            if (container) {
+                if (container.style.display === 'none') {
+                    container.style.display = 'flex';
+                    if (oldPwGroup) oldPwGroup.style.display = 'block';
+                    if (newPwGroup) newPwGroup.style.display = 'block';
+                    if (confirmPwGroup) confirmPwGroup.style.display = 'block';
+                    
+                    const lang = state.systemLang || 'zh';
+                    const slOldPw = document.getElementById('setting-label-old-password');
+                    if (slOldPw) slOldPw.textContent = TRANSLATIONS[lang]["setting_label_old_password"];
+                } else {
+                    container.style.display = 'none';
+                }
+            }
+        });
     }
     const btnTestLLM = document.getElementById('btn-test-llm');
     if (btnTestLLM) {
@@ -3705,7 +3772,21 @@ async function loadAndRenderSystemSettings() {
         }
         
         if (elements.settingApiBase) elements.settingApiBase.value = localStorage.getItem('KICKRSS_API_BASE') || '';
-        if (elements.settingAccessPassword) elements.settingAccessPassword.value = settingsData.access_password || '';
+        state.currentAccessPassword = settingsData.access_password || '';
+        const hasPassword = !!state.currentAccessPassword;
+        if (elements.settingEnableAuth) {
+            elements.settingEnableAuth.checked = hasPassword;
+        }
+        if (elements.settingOldPassword) elements.settingOldPassword.value = '';
+        if (elements.settingNewPassword) elements.settingNewPassword.value = '';
+        if (elements.settingConfirmPassword) elements.settingConfirmPassword.value = '';
+        
+        const container = document.getElementById('password-fields-container');
+        if (container) container.style.display = 'none';
+        
+        if (elements.settingBtnChangePassword) {
+            elements.settingBtnChangePassword.style.display = hasPassword ? 'inline-block' : 'none';
+        }
         if (elements.settingFetchInterval) elements.settingFetchInterval.value = settingsData.fetch_interval_minutes;
         if (elements.settingMinTextChars) elements.settingMinTextChars.value = settingsData.min_text_chars;
         if (elements.settingPromoteThreshold) elements.settingPromoteThreshold.value = settingsData.promote_threshold;
@@ -3752,6 +3833,61 @@ async function saveSystemSettings(e) {
         }
     }
     
+    const lang = (elements.settingSystemLang ? elements.settingSystemLang.value : state.systemLang) || 'zh';
+    
+    let targetPassword = state.currentAccessPassword;
+    const isAuthEnabled = elements.settingEnableAuth ? elements.settingEnableAuth.checked : false;
+    const hasPassword = !!state.currentAccessPassword;
+    
+    if (isAuthEnabled) {
+        if (hasPassword) {
+            const container = document.getElementById('password-fields-container');
+            const isChangeOpen = container && container.style.display !== 'none';
+            
+            if (isChangeOpen) {
+                const oldPw = elements.settingOldPassword ? elements.settingOldPassword.value : '';
+                const newPw = elements.settingNewPassword ? elements.settingNewPassword.value : '';
+                const confirmPw = elements.settingConfirmPassword ? elements.settingConfirmPassword.value : '';
+                
+                if (newPw) {
+                    if (oldPw !== state.currentAccessPassword) {
+                        alert(TRANSLATIONS[lang]["setting_error_old_password_incorrect"] || "旧密码错误，验证失败！");
+                        return;
+                    }
+                    if (newPw !== confirmPw) {
+                        alert(TRANSLATIONS[lang]["setting_error_passwords_dont_match"] || "两次输入的新密码不一致！");
+                        return;
+                    }
+                    targetPassword = newPw;
+                }
+            }
+        } else {
+            const newPw = elements.settingNewPassword ? elements.settingNewPassword.value : '';
+            const confirmPw = elements.settingConfirmPassword ? elements.settingConfirmPassword.value : '';
+            
+            if (!newPw) {
+                alert(TRANSLATIONS[lang]["setting_error_new_password_empty"] || "请输入新密码以启用密码保护！");
+                return;
+            }
+            if (newPw !== confirmPw) {
+                alert(TRANSLATIONS[lang]["setting_error_passwords_dont_match"] || "两次输入的新密码不一致！");
+                return;
+            }
+            targetPassword = newPw;
+        }
+    } else {
+        if (hasPassword) {
+            const oldPw = elements.settingOldPassword ? elements.settingOldPassword.value : '';
+            if (oldPw !== state.currentAccessPassword) {
+                alert(TRANSLATIONS[lang]["setting_error_old_password_incorrect"] || "旧密码错误，验证失败！");
+                return;
+            }
+            targetPassword = "";
+        } else {
+            targetPassword = "";
+        }
+    }
+    
     const payload = {
         fetch_interval_minutes: elements.settingFetchInterval ? parseInt(elements.settingFetchInterval.value) : 15,
         min_text_chars: elements.settingMinTextChars ? parseInt(elements.settingMinTextChars.value) : 100,
@@ -3773,7 +3909,7 @@ async function saveSystemSettings(e) {
         chat_model: elements.settingChatModel ? elements.settingChatModel.value.trim() : "",
         chat_max_tokens: (elements.settingChatTokens && elements.settingChatTokens.value) ? parseInt(elements.settingChatTokens.value) : null,
         interest_profile_enabled: elements.settingInterestProfileEnabled ? elements.settingInterestProfileEnabled.checked : false,
-        access_password: elements.settingAccessPassword ? elements.settingAccessPassword.value.trim() : ""
+        access_password: targetPassword
     };
     
     try {
@@ -4066,6 +4202,18 @@ const TRANSLATIONS = {
         "settings_chat_tokens_label": "对话 Token 限制",
         "settings_api_base_placeholder": "例如 http://localhost:8888",
         "settings_access_password_placeholder": "留空关闭密码验证...",
+        "setting_label_enable_auth": "启用安全密码保护",
+        "setting_label_old_password": "当前旧密码",
+        "setting_label_old_password_disable": "当前旧密码 (关闭保护需验证)",
+        "setting_label_new_password": "输入新密码",
+        "setting_label_confirm_password": "确认新密码",
+        "setting_btn_change_password": "修改密码",
+        "setting_placeholder_old_password": "输入当前旧密码...",
+        "setting_placeholder_new_password": "输入新密码...",
+        "setting_placeholder_confirm_password": "再次输入新密码...",
+        "setting_error_old_password_incorrect": "旧密码错误，验证失败！",
+        "setting_error_passwords_dont_match": "两次输入的新密码不一致！",
+        "setting_error_new_password_empty": "请输入新密码以启用密码保护！",
         "settings_ai_url_placeholder": "留空以关闭 AI 功能...",
         "settings_ai_key_placeholder": "输入密钥...",
         "settings_chat_model_placeholder": "默认..."
@@ -4211,6 +4359,18 @@ const TRANSLATIONS = {
         "settings_chat_tokens_label": "對話 Token 限制",
         "settings_api_base_placeholder": "例如 http://localhost:8888",
         "settings_access_password_placeholder": "留空關閉密碼驗證...",
+        "setting_label_enable_auth": "啟用安全密碼保護",
+        "setting_label_old_password": "當前舊密碼",
+        "setting_label_old_password_disable": "當前舊密碼 (關閉保護需驗證)",
+        "setting_label_new_password": "輸入新密碼",
+        "setting_label_confirm_password": "確認新密碼",
+        "setting_btn_change_password": "修改密碼",
+        "setting_placeholder_old_password": "輸入當前舊密碼...",
+        "setting_placeholder_new_password": "輸入新密碼...",
+        "setting_placeholder_confirm_password": "再次輸入新密碼...",
+        "setting_error_old_password_incorrect": "舊密碼錯誤，驗證失敗！",
+        "setting_error_passwords_dont_match": "兩次輸入的新密碼不一致！",
+        "setting_error_new_password_empty": "請輸入新密碼以啟用密碼保護！",
         "settings_ai_url_placeholder": "留空以關閉 AI 功能...",
         "settings_ai_key_placeholder": "輸入金鑰...",
         "settings_chat_model_placeholder": "默認..."
@@ -4356,6 +4516,18 @@ const TRANSLATIONS = {
         "settings_chat_tokens_label": "Chat Token Limit",
         "settings_api_base_placeholder": "e.g. http://localhost:8888",
         "settings_access_password_placeholder": "Leave empty to disable password verification...",
+        "setting_label_enable_auth": "Enable Password Protection",
+        "setting_label_old_password": "Current Password",
+        "setting_label_old_password_disable": "Current Password (Required to disable)",
+        "setting_label_new_password": "New Password",
+        "setting_label_confirm_password": "Confirm New Password",
+        "setting_btn_change_password": "Change Password",
+        "setting_placeholder_old_password": "Enter current password...",
+        "setting_placeholder_new_password": "Enter new password...",
+        "setting_placeholder_confirm_password": "Confirm new password...",
+        "setting_error_old_password_incorrect": "Incorrect current password!",
+        "setting_error_passwords_dont_match": "New passwords do not match!",
+        "setting_error_new_password_empty": "Please enter a new password to enable protection!",
         "settings_ai_url_placeholder": "Leave empty to disable AI features...",
         "settings_ai_key_placeholder": "Enter API key...",
         "settings_chat_model_placeholder": "Default..."
@@ -4501,6 +4673,18 @@ const TRANSLATIONS = {
         "settings_chat_tokens_label": "チャットToken制限",
         "settings_api_base_placeholder": "例: http://localhost:8888",
         "settings_access_password_placeholder": "空欄でパスワード検証を無効にする...",
+        "setting_label_enable_auth": "パスワード保護を有効にする",
+        "setting_label_old_password": "現在のパスワード",
+        "setting_label_old_password_disable": "現在のパスワード (無効にするには必要)",
+        "setting_label_new_password": "新しいパスワード",
+        "setting_label_confirm_password": "新しいパスワードの確認",
+        "setting_btn_change_password": "パスワードを変更",
+        "setting_placeholder_old_password": "現在のパスワードを入力...",
+        "setting_placeholder_new_password": "新しいパスワードを入力...",
+        "setting_placeholder_confirm_password": "新しいパスワードを再入力...",
+        "setting_error_old_password_incorrect": "現在のパスワードが正しくありません！",
+        "setting_error_passwords_dont_match": "新しいパスワードが一致しません！",
+        "setting_error_new_password_empty": "パスワードを入力して保護を有効にしてください！",
         "settings_ai_url_placeholder": "空欄でAI機能を無効化...",
         "settings_ai_key_placeholder": "APIキーを入力...",
         "settings_chat_model_placeholder": "デフォルト..."
@@ -4646,6 +4830,18 @@ const TRANSLATIONS = {
         "settings_chat_tokens_label": "채팅 토큰 제한",
         "settings_api_base_placeholder": "예: http://localhost:8888",
         "settings_access_password_placeholder": "비밀번호 검증을 비활성화하려면 비워 둠...",
+        "setting_label_enable_auth": "비밀번호 보호 활성화",
+        "setting_label_old_password": "현재 비밀번호",
+        "setting_label_old_password_disable": "현재 비밀번호 (비활성화하려면 필수)",
+        "setting_label_new_password": "새 비밀번호",
+        "setting_label_confirm_password": "새 비밀번호 확인",
+        "setting_btn_change_password": "비밀번호 변경",
+        "setting_placeholder_old_password": "현재 비밀번호 입력...",
+        "setting_placeholder_new_password": "새 비밀번호 입력...",
+        "setting_placeholder_confirm_password": "새 비밀번호 재입력...",
+        "setting_error_old_password_incorrect": "현재 비밀번호가 일치하지 않습니다!",
+        "setting_error_passwords_dont_match": "새 비밀번호가 일치하지 않습니다!",
+        "setting_error_new_password_empty": "보호를 활성화하려면 새 비밀번호를 입력하십시오!",
         "settings_ai_url_placeholder": "AI 기능을 비활성화하려면 비워 둠...",
         "settings_ai_key_placeholder": "API 키 입력...",
         "settings_chat_model_placeholder": "기본..."
@@ -4791,6 +4987,18 @@ const TRANSLATIONS = {
         "settings_chat_tokens_label": "Limite de jetons chat",
         "settings_api_base_placeholder": "ex. http://localhost:8888",
         "settings_access_password_placeholder": "Laisser vide pour désactiver l'authentification...",
+        "setting_label_enable_auth": "Activer la protection par mot de passe",
+        "setting_label_old_password": "Mot de passe actuel",
+        "setting_label_old_password_disable": "Mot de passe actuel (requis pour désactiver)",
+        "setting_label_new_password": "Nouveau mot de passe",
+        "setting_label_confirm_password": "Confirmer le nouveau mot de passe",
+        "setting_btn_change_password": "Modifier le mot de passe",
+        "setting_placeholder_old_password": "Entrez le mot de passe actuel...",
+        "setting_placeholder_new_password": "Entrez le nouveau mot de passe...",
+        "setting_placeholder_confirm_password": "Confirmez le nouveau mot de passe...",
+        "setting_error_old_password_incorrect": "Mot de passe actuel incorrect !",
+        "setting_error_passwords_dont_match": "Les nouveaux mots de passe ne correspondent pas !",
+        "setting_error_new_password_empty": "Veuillez entrer un nouveau mot de passe pour activer la protection !",
         "settings_ai_url_placeholder": "Laisser vide pour désactiver l'IA...",
         "settings_ai_key_placeholder": "Saisir la clé API...",
         "settings_chat_model_placeholder": "Par défaut..."
@@ -4936,6 +5144,18 @@ const TRANSLATIONS = {
         "settings_chat_tokens_label": "Límite de tokens chat",
         "settings_api_base_placeholder": "p. ej. http://localhost:8888",
         "settings_access_password_placeholder": "Dejar vacío para desactivar la autenticación...",
+        "setting_label_enable_auth": "Activar protección por contraseña",
+        "setting_label_old_password": "Contraseña actual",
+        "setting_label_old_password_disable": "Contraseña actual (requerida para desactivar)",
+        "setting_label_new_password": "Nueva contraseña",
+        "setting_label_confirm_password": "Confirmar nueva contraseña",
+        "setting_btn_change_password": "Cambiar contraseña",
+        "setting_placeholder_old_password": "Introduzca la contraseña actual...",
+        "setting_placeholder_new_password": "Introduzca la nueva contraseña...",
+        "setting_placeholder_confirm_password": "Confirme la nueva contraseña...",
+        "setting_error_old_password_incorrect": "¡Contraseña actual incorrecta!",
+        "setting_error_passwords_dont_match": "¡Las nuevas contraseñas no coinciden!",
+        "setting_error_new_password_empty": "¡Introduzca una nueva contraseña para activar la protección!",
         "settings_ai_url_placeholder": "Dejar vacío para desactivar la IA...",
         "settings_ai_key_placeholder": "Introducir clave API...",
         "settings_chat_model_placeholder": "Predeterminado..."
@@ -5081,6 +5301,18 @@ const TRANSLATIONS = {
         "settings_chat_tokens_label": "Chat Token-Limit",
         "settings_api_base_placeholder": "z. B. http://localhost:8888",
         "settings_access_password_placeholder": "Leer lassen, um die Passwortprüfung zu deaktivieren...",
+        "setting_label_enable_auth": "Passwortschutz aktivieren",
+        "setting_label_old_password": "Aktuelles Passwort",
+        "setting_label_old_password_disable": "Aktuelles Passwort (zum Deaktivieren erforderlich)",
+        "setting_label_new_password": "Neues Passwort",
+        "setting_label_confirm_password": "Neues Passwort bestätigen",
+        "setting_btn_change_password": "Kennwort ändern",
+        "setting_placeholder_old_password": "Aktuelles Passwort eingeben...",
+        "setting_placeholder_new_password": "Neues Passwort eingeben...",
+        "setting_placeholder_confirm_password": "Neues Passwort bestätigen...",
+        "setting_error_old_password_incorrect": "Aktuelles Passwort ist falsch!",
+        "setting_error_passwords_dont_match": "Die neuen Passwörter stimmen nicht überein!",
+        "setting_error_new_password_empty": "Bitte geben Sie ein neues Passwort ein, um den Schutz zu aktivieren!",
         "settings_ai_url_placeholder": "Leer lassen, um KI-Funktionen zu deaktivieren...",
         "settings_ai_key_placeholder": "API-Schlüssel eingeben...",
         "settings_chat_model_placeholder": "Standard..."
@@ -5347,8 +5579,24 @@ function updateUILanguage(lang) {
     // Settings Field Labels
     const slApiBase = document.getElementById('setting-label-api-base');
     if (slApiBase) slApiBase.textContent = TRANSLATIONS[lang]["settings_api_base_label"];
-    const slAccessPw = document.getElementById('setting-label-access-password');
-    if (slAccessPw) slAccessPw.textContent = TRANSLATIONS[lang]["settings_access_password_label"];
+    const slEnableAuth = document.getElementById('setting-label-enable-auth');
+    if (slEnableAuth) slEnableAuth.textContent = TRANSLATIONS[lang]["setting_label_enable_auth"];
+    const btnChangePw = document.getElementById('setting-btn-change-password');
+    if (btnChangePw) btnChangePw.textContent = TRANSLATIONS[lang]["setting_btn_change_password"];
+    
+    const slOldPw = document.getElementById('setting-label-old-password');
+    if (slOldPw) {
+        const isEnableChecked = document.getElementById('setting-enable-auth')?.checked;
+        if (!isEnableChecked) {
+            slOldPw.textContent = TRANSLATIONS[lang]["setting_label_old_password_disable"];
+        } else {
+            slOldPw.textContent = TRANSLATIONS[lang]["setting_label_old_password"];
+        }
+    }
+    const slNewPw = document.getElementById('setting-label-new-password');
+    if (slNewPw) slNewPw.textContent = TRANSLATIONS[lang]["setting_label_new_password"];
+    const slConfirmPw = document.getElementById('setting-label-confirm-password');
+    if (slConfirmPw) slConfirmPw.textContent = TRANSLATIONS[lang]["setting_label_confirm_password"];
     const slFetchInt = document.getElementById('setting-label-fetch-interval');
     if (slFetchInt) slFetchInt.textContent = TRANSLATIONS[lang]["settings_fetch_interval_label"];
     const slMinChars = document.getElementById('setting-label-min-text-chars');
@@ -5530,8 +5778,12 @@ function updateUILanguage(lang) {
     const inputApiBase = document.getElementById('setting-api-base');
     if (inputApiBase) inputApiBase.placeholder = TRANSLATIONS[lang]["settings_api_base_placeholder"] || '';
     
-    const inputAccessPw = document.getElementById('setting-access-password');
-    if (inputAccessPw) inputAccessPw.placeholder = TRANSLATIONS[lang]["settings_access_password_placeholder"] || '';
+    const inputOldPw = document.getElementById('setting-old-password');
+    if (inputOldPw) inputOldPw.placeholder = TRANSLATIONS[lang]["setting_placeholder_old_password"] || '';
+    const inputNewPw = document.getElementById('setting-new-password');
+    if (inputNewPw) inputNewPw.placeholder = TRANSLATIONS[lang]["setting_placeholder_new_password"] || '';
+    const inputConfirmPw = document.getElementById('setting-confirm-password');
+    if (inputConfirmPw) inputConfirmPw.placeholder = TRANSLATIONS[lang]["setting_placeholder_confirm_password"] || '';
     
     const inputAiUrl = document.getElementById('setting-ai-url');
     if (inputAiUrl) inputAiUrl.placeholder = TRANSLATIONS[lang]["settings_ai_url_placeholder"] || '';
