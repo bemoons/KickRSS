@@ -5765,8 +5765,8 @@ window.showPasswordGate = function() {
     const isEn = state.systemLang === 'en';
     const title = isEn ? "Access Password Required" : "输入访问密码";
     const subtitle = isEn 
-        ? "This KickRSS reader is protected. Please enter the password to unlock your feeds and LLM services." 
-        : "此 KickRSS 服务受安全保护，请输入访问密码以解锁订阅源及 AI 资产。";
+        ? "This KickRSS reader is protected. Please enter the password to unlock." 
+        : "此 KickRSS 服务受安全保护，请输入访问密码以解锁。";
     const placeholder = isEn ? "Password" : "访问密码";
     const btnText = isEn ? "Unlock" : "解锁";
 
@@ -5829,12 +5829,14 @@ window.showPasswordGate = function() {
                     selectGlobalUnread(true);
                 });
             } else {
-                throw new Error("Incorrect password");
+                const errData = await response.json().catch(() => ({}));
+                const errText = errData.detail || (isEn ? "Incorrect password, please try again." : "密码错误，请重试");
+                throw new Error(errText);
             }
         } catch (e) {
             submitBtn.disabled = false;
             submitBtn.textContent = btnText;
-            errMsg.textContent = isEn ? "Incorrect password, please try again." : "密码错误，请重试";
+            errMsg.textContent = e.message || (isEn ? "Incorrect password, please try again." : "密码错误，请重试");
             errMsg.classList.add('show');
             
             // Trigger shake animation
