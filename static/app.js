@@ -4063,7 +4063,12 @@ const TRANSLATIONS = {
         "settings_chat_url_label": "对话 Base URL (留空默认使用全局)",
         "settings_chat_key_label": "对话 API Key (可选，留空则继承全局)",
         "settings_chat_model_label": "对话模型名称 (留空默认)",
-        "settings_chat_tokens_label": "对话 Token 限制"
+        "settings_chat_tokens_label": "对话 Token 限制",
+        "settings_api_base_placeholder": "例如 http://localhost:8888",
+        "settings_access_password_placeholder": "留空关闭密码验证...",
+        "settings_ai_url_placeholder": "留空以关闭 AI 功能...",
+        "settings_ai_key_placeholder": "输入密钥...",
+        "settings_chat_model_placeholder": "默认..."
     },
     "zh-hant": {
         "unread_articles": "未讀文章",
@@ -4203,7 +4208,12 @@ const TRANSLATIONS = {
         "settings_chat_url_label": "對話 Base URL (留空默認使用全局)",
         "settings_chat_key_label": "對話 API Key (可選，留空則繼承全局)",
         "settings_chat_model_label": "對話模型名稱 (留空默認)",
-        "settings_chat_tokens_label": "對話 Token 限制"
+        "settings_chat_tokens_label": "對話 Token 限制",
+        "settings_api_base_placeholder": "例如 http://localhost:8888",
+        "settings_access_password_placeholder": "留空關閉密碼驗證...",
+        "settings_ai_url_placeholder": "留空以關閉 AI 功能...",
+        "settings_ai_key_placeholder": "輸入金鑰...",
+        "settings_chat_model_placeholder": "默認..."
     },
     en: {
         "unread_articles": "Unread Articles",
@@ -4343,7 +4353,12 @@ const TRANSLATIONS = {
         "settings_chat_url_label": "Chat Base URL (Leave empty to inherit global)",
         "settings_chat_key_label": "Chat API Key (Leave empty to inherit global)",
         "settings_chat_model_label": "Chat Model Name (Leave empty for default)",
-        "settings_chat_tokens_label": "Chat Token Limit"
+        "settings_chat_tokens_label": "Chat Token Limit",
+        "settings_api_base_placeholder": "e.g. http://localhost:8888",
+        "settings_access_password_placeholder": "Leave empty to disable password verification...",
+        "settings_ai_url_placeholder": "Leave empty to disable AI features...",
+        "settings_ai_key_placeholder": "Enter API key...",
+        "settings_chat_model_placeholder": "Default..."
     },
     ja: {
         "unread_articles": "未読記事",
@@ -4483,7 +4498,12 @@ const TRANSLATIONS = {
         "settings_chat_url_label": "チャットBase URL (空欄でグローバルを継承)",
         "settings_chat_key_label": "チャットAPI Key (任意、空欄でグローバルを継承)",
         "settings_chat_model_label": "チャットモデル名 (空欄でデフォルト)",
-        "settings_chat_tokens_label": "チャットToken制限"
+        "settings_chat_tokens_label": "チャットToken制限",
+        "settings_api_base_placeholder": "例: http://localhost:8888",
+        "settings_access_password_placeholder": "空欄でパスワード検証を無効にする...",
+        "settings_ai_url_placeholder": "空欄でAI機能を無効化...",
+        "settings_ai_key_placeholder": "APIキーを入力...",
+        "settings_chat_model_placeholder": "デフォルト..."
     },
     ko: {
         "unread_articles": "읽지 않은 글",
@@ -4623,7 +4643,12 @@ const TRANSLATIONS = {
         "settings_chat_url_label": "채팅 Base URL (공란 시 글로벌 설정 상속)",
         "settings_chat_key_label": "채팅 API Key (선택 사항, 공란 시 글로벌 설정 상속)",
         "settings_chat_model_label": "채팅 모델명 (공란 시 기본값)",
-        "settings_chat_tokens_label": "채팅 토큰 제한"
+        "settings_chat_tokens_label": "채팅 토큰 제한",
+        "settings_api_base_placeholder": "예: http://localhost:8888",
+        "settings_access_password_placeholder": "비밀번호 검증을 비활성화하려면 비워 둠...",
+        "settings_ai_url_placeholder": "AI 기능을 비활성화하려면 비워 둠...",
+        "settings_ai_key_placeholder": "API 키 입력...",
+        "settings_chat_model_placeholder": "기본..."
     },
     fr: {
         "unread_articles": "Articles non lus",
@@ -4763,7 +4788,12 @@ const TRANSLATIONS = {
         "settings_chat_url_label": "Chat API Base URL (Laisser vide pour hériter du global)",
         "settings_chat_key_label": "Clé API chat (Optionnel, laisser vide pour hériter du global)",
         "settings_chat_model_label": "Nom du modèle chat (Laisser vide pour défaut)",
-        "settings_chat_tokens_label": "Limite de jetons chat"
+        "settings_chat_tokens_label": "Limite de jetons chat",
+        "settings_api_base_placeholder": "ex. http://localhost:8888",
+        "settings_access_password_placeholder": "Laisser vide pour désactiver l'authentification...",
+        "settings_ai_url_placeholder": "Laisser vide pour désactiver l'IA...",
+        "settings_ai_key_placeholder": "Saisir la clé API...",
+        "settings_chat_model_placeholder": "Par défaut..."
     },
     es: {
         "unread_articles": "Artículos no leídos",
@@ -4903,7 +4933,12 @@ const TRANSLATIONS = {
         "settings_chat_url_label": "URL base de chat (Dejar vacío para heredar del global)",
         "settings_chat_key_label": "Clave API chat (Opcional, dejar vacío para heredar del global)",
         "settings_chat_model_label": "Nombre del modelo chat (Dejar vacío para predeterminado)",
-        "settings_chat_tokens_label": "Límite de tokens chat"
+        "settings_chat_tokens_label": "Límite de tokens chat",
+        "settings_api_base_placeholder": "p. ej. http://localhost:8888",
+        "settings_access_password_placeholder": "Dejar vacío para desactivar la autenticación...",
+        "settings_ai_url_placeholder": "Dejar vacío para desactivar la IA...",
+        "settings_ai_key_placeholder": "Introducir clave API...",
+        "settings_chat_model_placeholder": "Predeterminado..."
     },
     de: {
         "unread_articles": "Ungelesene Artikel",
@@ -5043,7 +5078,12 @@ const TRANSLATIONS = {
         "settings_chat_url_label": "Chat Base URL (Leer lassen, um globale Einstellung zu übernehmen)",
         "settings_chat_key_label": "Chat-API Key (Optional, leer lassen, um globale Einstellung zu übernehmen)",
         "settings_chat_model_label": "Chat-Modellname (Leer lassen für Standard)",
-        "settings_chat_tokens_label": "Chat Token-Limit"
+        "settings_chat_tokens_label": "Chat Token-Limit",
+        "settings_api_base_placeholder": "z. B. http://localhost:8888",
+        "settings_access_password_placeholder": "Leer lassen, um die Passwortprüfung zu deaktivieren...",
+        "settings_ai_url_placeholder": "Leer lassen, um KI-Funktionen zu deaktivieren...",
+        "settings_ai_key_placeholder": "API-Schlüssel eingeben...",
+        "settings_chat_model_placeholder": "Standard..."
     }
 }
 
@@ -5485,6 +5525,41 @@ function updateUILanguage(lang) {
     
     const mobileDetailTitle = document.getElementById('mobile-detail-header-title');
     if (mobileDetailTitle) mobileDetailTitle.textContent = TRANSLATIONS[lang]["article_text_and_ai_summary"];
+
+    // 12. Settings Placeholders
+    const inputApiBase = document.getElementById('setting-api-base');
+    if (inputApiBase) inputApiBase.placeholder = TRANSLATIONS[lang]["settings_api_base_placeholder"] || '';
+    
+    const inputAccessPw = document.getElementById('setting-access-password');
+    if (inputAccessPw) inputAccessPw.placeholder = TRANSLATIONS[lang]["settings_access_password_placeholder"] || '';
+    
+    const inputAiUrl = document.getElementById('setting-ai-url');
+    if (inputAiUrl) inputAiUrl.placeholder = TRANSLATIONS[lang]["settings_ai_url_placeholder"] || '';
+    
+    const inputAiKey = document.getElementById('setting-ai-key');
+    if (inputAiKey) inputAiKey.placeholder = TRANSLATIONS[lang]["settings_ai_key_placeholder"] || '';
+    
+    const inputAiModel = document.getElementById('setting-ai-model');
+    if (inputAiModel) inputAiModel.placeholder = TRANSLATIONS[lang]["settings_ai_url_placeholder"] || '';
+    
+    const inputChatModel = document.getElementById('setting-chat-model');
+    if (inputChatModel) inputChatModel.placeholder = TRANSLATIONS[lang]["settings_chat_model_placeholder"] || '';
+    
+    // 13. Target Language dropdown options
+    const optAuto = document.querySelector('#setting-ai-summary-lang option[value="auto"]');
+    if (optAuto) {
+        const autoText = {
+            'zh': '跟随原文 (Auto)',
+            'zh-hant': '跟隨原文 (Auto)',
+            'en': 'Follow Original (Auto)',
+            'ja': '原文に従う (Auto)',
+            'ko': '원본 문서 언어 (Auto)',
+            'fr': 'Suivre l\'original (Auto)',
+            'es': 'Seguir original (Auto)',
+            'de': 'Original folgen (Auto)'
+        };
+        optAuto.textContent = autoText[lang] || '跟随原文 (Auto)';
+    }
 }
 
 function renderBilingualContainer(content) {
