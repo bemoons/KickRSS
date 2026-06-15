@@ -19,14 +19,18 @@ def get_entry_fulltext(entry_id: int) -> Dict[str, Any]:
             has_summary = True
         
         row = crud.get_entry_fulltext(conn, entry_id)
-        if row:
+        if row and (row["content"] or "").strip():
             clean_len = ai.estimate_clean_text_length(row["content"] or "")
             return {"content": row["content"], "status": row["status"], "has_summary": has_summary, "clean_char_count": clean_len}
             
-    content = crud.clean_html(entry["raw_content"] or "")
-    status = "ok"
-    fetcher = "feed"
-    
+    import extractor
+    if entry["fulltext_ready"] == 1 and (entry["raw_content"] or "").strip():
+        content = crud.clean_html(entry["raw_content"] or "")
+        status = "ok"
+        fetcher = "feed"
+    else:
+        content, status, fetcher = extractor.fetch_and_extract_fulltext(entry["url"])
+        
     with db.get_db() as conn:
         crud.save_fulltext(conn, entry_id, content, status, fetcher)
         

@@ -1,14 +1,22 @@
 // Hook/override global fetch and EventSource to support frontend-backend decoupling (configurable backend URL) and session expiration
 (function() {
-    // Clean up bypass-sw parameter if present to keep URL clean after successful authentication
+    // Clean up bypass-sw and cache-busting parameters if present to keep URL clean after successful authentication
     try {
         const url = new URL(window.location.href);
+        let changed = false;
         if (url.searchParams.has('bypass-sw')) {
             url.searchParams.delete('bypass-sw');
+            changed = true;
+        }
+        if (url.searchParams.has('_t')) {
+            url.searchParams.delete('_t');
+            changed = true;
+        }
+        if (changed) {
             window.history.replaceState({}, '', url.toString());
         }
     } catch (e) {
-        console.error('Failed to clean bypass-sw parameter:', e);
+        console.error('Failed to clean bypass-sw and cache-busting parameters:', e);
     }
 
     const apiBase = window.localStorage.getItem('KICKRSS_API_BASE') || '';
@@ -21,10 +29,12 @@
         try {
             const response = await originalFetch(fetchUrl, init);
             if (response.status === 401) {
-                // Redirect to main page with bypass-sw parameter to let browser handle basic auth prompt natively
-                const currentUrl = new URL(window.location.href);
-                currentUrl.searchParams.set('bypass-sw', '1');
-                window.location.replace(currentUrl.toString());
+                const url = typeof input === 'string' ? input : (input.url || '');
+                if (!url.includes('/login')) {
+                    if (window.showPasswordGate) {
+                        window.showPasswordGate();
+                    }
+                }
             }
             return response;
         } catch (err) {
@@ -71,7 +81,8 @@ const state = {
     interestProfileEnabled: false,
     profileTrendView: 'week', // 'week' or 'month'
     interestProfileData: null,
-    backToFeedsFromDetail: false
+    backToFeedsFromDetail: false,
+    loadSessionId: 0
 };
 
 let currentEngagement = null;
@@ -160,6 +171,7 @@ const elements = {
     
     // Settings inputs
     settingApiBase: document.getElementById('setting-api-base'),
+    settingAccessPassword: document.getElementById('setting-access-password'),
     settingFetchInterval: document.getElementById('setting-fetch-interval'),
     settingMinTextChars: document.getElementById('setting-min-text-chars'),
     settingAiUrl: document.getElementById('setting-ai-url'),
@@ -336,6 +348,19 @@ function initEventListeners() {
     }
     
     // Global Search Input
+    function triggerSearch(val) {
+        state.activeView = 'search';
+        document.querySelectorAll('.feed-row').forEach(node => node.classList.remove('active'));
+        document.querySelectorAll('.category-row').forEach(node => node.classList.remove('active'));
+        if (elements.btnAllUnread) elements.btnAllUnread.classList.remove('active');
+        if (elements.btnStarred) elements.btnStarred.classList.remove('active');
+        if (elements.btnNotes) elements.btnNotes.classList.remove('active');
+        
+        if (elements.currentCategoryName) elements.currentCategoryName.textContent = `搜索: "${val}"`;
+        loadSearchEntries(val);
+        document.body.classList.add('show-entries'); // Navigate to entries list on mobile search
+    }
+
     if (elements.searchInput) {
         elements.searchInput.addEventListener('input', (e) => {
             const val = e.target.value.trim();
@@ -343,23 +368,30 @@ function initEventListeners() {
                 if (state.activeView === 'search') {
                     selectGlobalUnread();
                 }
-                return;
             }
-            
-            clearTimeout(window.searchTimeout);
-            window.searchTimeout = setTimeout(() => {
-                state.activeView = 'search';
-                document.querySelectorAll('.feed-row').forEach(node => node.classList.remove('active'));
-                document.querySelectorAll('.category-row').forEach(node => node.classList.remove('active'));
-                if (elements.btnAllUnread) elements.btnAllUnread.classList.remove('active');
-                if (elements.btnStarred) elements.btnStarred.classList.remove('active');
-                if (elements.btnNotes) elements.btnNotes.classList.remove('active');
-                
-                if (elements.currentCategoryName) elements.currentCategoryName.textContent = `搜索: "${val}"`;
-                loadSearchEntries(val);
-                document.body.classList.add('show-entries'); // Navigate to entries list on mobile search
-            }, 300);
         });
+
+        elements.searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const val = elements.searchInput.value.trim();
+                if (val !== '') {
+                    elements.searchInput.blur();
+                    triggerSearch(val);
+                }
+            }
+        });
+
+        const searchIcon = document.querySelector('.search-icon');
+        if (searchIcon) {
+            searchIcon.style.cursor = 'pointer';
+            searchIcon.addEventListener('click', () => {
+                const val = elements.searchInput.value.trim();
+                if (val !== '') {
+                    elements.searchInput.blur();
+                    triggerSearch(val);
+                }
+            });
+        }
     }
     
     // Quick Links
@@ -1173,15 +1205,20 @@ function selectStarredView(isStartup = false) {
 
 async function loadStarredEntries(appendMode = false) {
     if (!appendMode) {
+        state.loadSessionId = (state.loadSessionId || 0) + 1;
         state.entriesOffset = 0;
         state.hasMoreEntries = true;
         elements.entriesList.innerHTML = '<div class="loading-placeholder">正在加载收藏文章...</div>';
     }
+    const currentSessionId = state.loadSessionId;
     try {
         const offset = state.entriesOffset;
         const limit = state.entriesLimit;
         const response = await fetch(`/entries/starred?unread=0&limit=${limit}&offset=${offset}`);
         const data = await response.json();
+        
+        if (currentSessionId !== state.loadSessionId) return;
+        if (state.activeView !== 'starred') return;
         
         if (data.length < limit) {
             state.hasMoreEntries = false;
@@ -1225,16 +1262,21 @@ async function selectFeed(feedId) {
 
 async function loadFeedEntries(feedId, appendMode = false) {
     if (!appendMode) {
+        state.loadSessionId = (state.loadSessionId || 0) + 1;
         state.entriesOffset = 0;
         state.hasMoreEntries = true;
         elements.entriesList.innerHTML = '<div class="loading-placeholder">正在加载订阅源文章...</div>';
     }
+    const currentSessionId = state.loadSessionId;
     try {
         const offset = state.entriesOffset;
         const limit = state.entriesLimit;
         const unreadParam = state.filterUnreadOnly ? 1 : 0;
         const response = await fetch(`/feeds/${feedId}/entries?unread=${unreadParam}&limit=${limit}&offset=${offset}`);
         const data = await response.json();
+        
+        if (currentSessionId !== state.loadSessionId) return;
+        if (state.activeView !== 'feed' || state.selectedFeedId !== feedId) return;
         
         if (data.length < limit) {
             state.hasMoreEntries = false;
@@ -1257,15 +1299,20 @@ async function loadFeedEntries(feedId, appendMode = false) {
 
 async function loadSearchEntries(query, appendMode = false) {
     if (!appendMode) {
+        state.loadSessionId = (state.loadSessionId || 0) + 1;
         state.entriesOffset = 0;
         state.hasMoreEntries = true;
         elements.entriesList.innerHTML = '<div class="loading-placeholder">正在搜索文章...</div>';
     }
+    const currentSessionId = state.loadSessionId;
     try {
         const offset = state.entriesOffset;
         const limit = state.entriesLimit;
         const response = await fetch(`/search?q=${encodeURIComponent(query)}&unread=0&limit=${limit}&offset=${offset}`);
         const data = await response.json();
+        
+        if (currentSessionId !== state.loadSessionId) return;
+        if (state.activeView !== 'search' || elements.searchInput.value.trim() !== query) return;
         
         if (data.length < limit) {
             state.hasMoreEntries = false;
@@ -1322,15 +1369,20 @@ function selectCategory(feedId, catId, catName) {
 // ----------------------------------------------------
 async function loadUnreadEntries(appendMode = false) {
     if (!appendMode) {
+        state.loadSessionId = (state.loadSessionId || 0) + 1;
         state.entriesOffset = 0;
         state.hasMoreEntries = true;
         elements.entriesList.innerHTML = '<div class="loading-placeholder">正在加载未读文章...</div>';
     }
+    const currentSessionId = state.loadSessionId;
     try {
         const offset = state.entriesOffset;
         const limit = state.entriesLimit;
         const response = await fetch(`/entries/unread?limit=${limit}&offset=${offset}`);
         const data = await response.json();
+        
+        if (currentSessionId !== state.loadSessionId) return;
+        if (state.activeView !== 'unread') return;
         
         if (data.length < limit) {
             state.hasMoreEntries = false;
@@ -1353,16 +1405,21 @@ async function loadUnreadEntries(appendMode = false) {
 
 async function loadCategoryEntries(catId, appendMode = false) {
     if (!appendMode) {
+        state.loadSessionId = (state.loadSessionId || 0) + 1;
         state.entriesOffset = 0;
         state.hasMoreEntries = true;
         elements.entriesList.innerHTML = '<div class="loading-placeholder">正在加载文章列表...</div>';
     }
+    const currentSessionId = state.loadSessionId;
     try {
         const offset = state.entriesOffset;
         const limit = state.entriesLimit;
         const unreadParam = state.filterUnreadOnly ? 1 : 0;
         const response = await fetch(`/categories/${catId}/entries?unread=${unreadParam}&limit=${limit}&offset=${offset}`);
         const data = await response.json();
+        
+        if (currentSessionId !== state.loadSessionId) return;
+        if (state.activeView !== 'category' || state.selectedCategoryId !== catId) return;
         
         const feed = state.feeds.find(f => f.id === state.selectedFeedId);
         data.forEach(entry => {
@@ -1393,15 +1450,16 @@ function updateEntriesCountLabel() {
     
     const totalCards = elements.entriesList.querySelectorAll('.entry-card').length;
     const unreadCount = elements.entriesList.querySelectorAll('.entry-card.unread').length;
+    const lang = state.systemLang || 'zh';
     
     if (state.activeView === 'notes') {
-        elements.entriesCountLabel.textContent = `${totalCards} 篇笔记`;
+        elements.entriesCountLabel.textContent = (TRANSLATIONS[lang]["count_notes"] || "{count} 篇笔记").replace('{count}', totalCards);
     } else if (state.activeView === 'starred') {
-        elements.entriesCountLabel.textContent = `${totalCards} 篇收藏`;
+        elements.entriesCountLabel.textContent = (TRANSLATIONS[lang]["count_starred"] || "{count} 篇收藏").replace('{count}', totalCards);
     } else if (state.activeView === 'search') {
-        elements.entriesCountLabel.textContent = `${totalCards} 篇结果`;
+        elements.entriesCountLabel.textContent = (TRANSLATIONS[lang]["count_search"] || "{count} 篇结果").replace('{count}', totalCards);
     } else {
-        elements.entriesCountLabel.textContent = `${unreadCount} 篇未读`;
+        elements.entriesCountLabel.textContent = (TRANSLATIONS[lang]["count_unread"] || "{count} 篇未读").replace('{count}', unreadCount);
     }
 }
 
@@ -1435,12 +1493,13 @@ function refreshEntriesList(appendMode = false, newAddedData = []) {
         }
     }
     
-    if (filtered.length === 0) {
+        if (filtered.length === 0) {
+        const lang = state.systemLang || 'zh';
         elements.entriesList.innerHTML = `
             <div class="empty-state">
                 <span class="empty-icon">☕</span>
-                <h3>没有找到文章</h3>
-                <p>该分类下目前没有符合筛选条件的文章。</p>
+                <h3>${TRANSLATIONS[lang]["no_articles_title"]}</h3>
+                <p>${TRANSLATIONS[lang]["no_articles_desc"]}</p>
             </div>
         `;
         updateEntriesCountLabel();
@@ -1614,6 +1673,7 @@ function refreshEntriesList(appendMode = false, newAddedData = []) {
 
 async function loadMoreEntries() {
     if (state.isLoadingMore || !state.hasMoreEntries) return;
+    if (state.entriesOffset === 0) return;
     
     state.isLoadingMore = true;
     
@@ -3571,15 +3631,20 @@ function selectNotesView(isStartup = false) {
 
 async function loadNotesEntries(appendMode = false) {
     if (!appendMode) {
+        state.loadSessionId = (state.loadSessionId || 0) + 1;
         state.entriesOffset = 0;
         state.hasMoreEntries = true;
         elements.entriesList.innerHTML = '<div class="loading-placeholder">正在加载笔记文章...</div>';
     }
+    const currentSessionId = state.loadSessionId;
     try {
         const offset = state.entriesOffset;
         const limit = state.entriesLimit;
         const response = await fetch(`/entries/notes?limit=${limit}&offset=${offset}`);
         const data = await response.json();
+        
+        if (currentSessionId !== state.loadSessionId) return;
+        if (state.activeView !== 'notes') return;
         
         if (data.length < limit) {
             state.hasMoreEntries = false;
@@ -3640,6 +3705,7 @@ async function loadAndRenderSystemSettings() {
         }
         
         if (elements.settingApiBase) elements.settingApiBase.value = localStorage.getItem('KICKRSS_API_BASE') || '';
+        if (elements.settingAccessPassword) elements.settingAccessPassword.value = settingsData.access_password || '';
         if (elements.settingFetchInterval) elements.settingFetchInterval.value = settingsData.fetch_interval_minutes;
         if (elements.settingMinTextChars) elements.settingMinTextChars.value = settingsData.min_text_chars;
         if (elements.settingPromoteThreshold) elements.settingPromoteThreshold.value = settingsData.promote_threshold;
@@ -3706,7 +3772,8 @@ async function saveSystemSettings(e) {
         chat_api_key: elements.settingChatKey ? elements.settingChatKey.value.trim() : "",
         chat_model: elements.settingChatModel ? elements.settingChatModel.value.trim() : "",
         chat_max_tokens: (elements.settingChatTokens && elements.settingChatTokens.value) ? parseInt(elements.settingChatTokens.value) : null,
-        interest_profile_enabled: elements.settingInterestProfileEnabled ? elements.settingInterestProfileEnabled.checked : false
+        interest_profile_enabled: elements.settingInterestProfileEnabled ? elements.settingInterestProfileEnabled.checked : false,
+        access_password: elements.settingAccessPassword ? elements.settingAccessPassword.value.trim() : ""
     };
     
     try {
@@ -3901,7 +3968,107 @@ const TRANSLATIONS = {
         "translating": "正在对照翻译...",
         "show_original": "只看原文",
         "target_lang_label": "目标语言（摘要、翻译、问答）",
-        "ui_lang_label": "系统界面语言"
+        "ui_lang_label": "系统界面语言",
+        "my_notes": "我的笔记",
+        "select_all": "全选",
+        "batch_export": "📥 批量导出",
+        "all_unread_header": "所有未读",
+        "count_notes": "{count} 篇笔记",
+        "count_starred": "{count} 篇收藏",
+        "count_search": "{count} 篇结果",
+        "count_unread": "{count} 篇未读",
+        "empty_state_title": "阅读新视界",
+        "empty_state_desc": "选择中栏文章，开启 AI 一键摘要、标题党识别与即时追问对话。",
+        "no_feeds_title": "暂无文章",
+        "no_feeds_desc": "请选择左侧分类，或导入新的订阅源开始阅读。",
+        "no_articles_title": "没有找到文章",
+        "no_articles_desc": "该分类下目前没有符合筛选条件的文章。",
+        "all_read_title": "所有文章已读完",
+        "all_read_desc": "真棒！已清理完当前订阅源的全部未读。",
+        "add_feed_title": "新增订阅源",
+        "add_feed_desc": "输入任意 RSS/Atom 订阅源链接，AI 将自动分析并创建分类。",
+        "feed_url_placeholder": "输入订阅源链接...",
+        "add_button_submit": "确定添加",
+        "cancel": "取消",
+        "import_opml_title": "导入 OPML 订阅表",
+        "import_opml_desc": "选择从其他阅读器（如 Feedly, NetNewsWire）导出的 .opml 文件导入。",
+        "drop_zone_label": "点击或拖拽 OPML 文件到这里",
+        "import_button_submit": "开始导入",
+        "feed_management_tab": "订阅源管理",
+        "system_settings_tab": "系统参数设置",
+        "manage_feeds_desc": "管理您的订阅源（改名、启用/禁用、删除或备份导出）。",
+        "import_opml_btn": "导入 OPML",
+        "export_opml_btn": "导出 OPML",
+        "article_text_and_ai_summary": "文章正文与 AI 摘要",
+        "profile_title": "我的阅读画像",
+        "profile_tab_token": "📅 Token 统计",
+        "profile_tab_interest": "📊 兴趣画像",
+        "profile_habit_title": "🪙 一周每日 Token 消耗统计",
+        "profile_habit_insight": "阅读习惯分析中...",
+        "profile_label_category_distribution": "📊 分类阅读分布",
+        "profile_label_stat_total": "近30天总阅读",
+        "profile_label_stat_high": "深度阅读 (读)",
+        "profile_label_stat_low": "快速跳过 (看)",
+        "profile_label_tag_cloud": "🎯 兴趣标签云 (点击标签查看详情)",
+        "profile_detail_title": "话题详情",
+        "profile_detail_label_count": "深度阅读: {count} 篇",
+        "profile_detail_label_starred": "已收藏: {count} 篇",
+        "profile_detail_label_original": "访问原文: {count} 次",
+        "profile_detail_label_trend": "近4周阅读活跃度趋势",
+        "profile_detail_label_articles": "代表文章",
+        "profile_label_heatmap": "📅 话题关注趋势 (近4周)",
+        "profile_less": "少",
+        "profile_more": "多",
+        "profile_calculating": "正在计算阅读偏好，提炼画像数据...",
+        "profile_disabled_title": "智能画像功能已关闭",
+        "profile_disabled_desc": "请在设置中开启「阅读画像与智能分级」以启用本功能。行为数据仅在本地采集，开启偏好分析会每日自动执行一次AI归纳。",
+        "profile_cold_start_title": "智能画像积累中",
+        "profile_cold_start_desc": "阅读数据积累中，需至少15篇文章的阅读行为。",
+        "profile_load_failed_desc": "无法获取阅读画像数据，请稍后重试。",
+        "profile_default_insight": "这是 AI 默默窥探你 30 天后的铁证。如果有些字小到要拿放大镜看，别怀疑，那就是你嘴上高喊‘热爱’却连点点都没点过的叶公好龙型兴趣。下次跟人假装博学之前，建议先来这里‘雨露均沾’一下，免得你的信息茧房厚到能防弹。",
+        "settings_server_security_title": "🌐 API 服务器与安全配置",
+        "settings_api_base_label": "后端 API 地址 (留空表示同域托管，例如 http://localhost:8888)",
+        "settings_access_password_label": "API 访问密码 (设置密码以在公网启用单密码锁定保护，留空则不开启验证)",
+        "settings_fetch_polling_title": "📡 抓取与轮询设置",
+        "settings_fetch_interval_label": "抓取周期 (分钟)",
+        "settings_min_text_chars_label": "全文判定长度阈值",
+        "settings_ai_endpoint_title": "🤖 默认 AI 端点配置 (可选)",
+        "settings_ai_url_label": "API Base URL",
+        "settings_ai_key_label": "API Key",
+        "settings_ai_model_label": "AI 模型名称",
+        "settings_btn_test_llm": "检查 LLM API 可用性",
+        "settings_token_consumption_label": "今日 AI Token 消耗 (Tokens):",
+        "settings_token_prompt": "输入: ",
+        "settings_token_completion": "输出: ",
+        "settings_token_total": "总计: ",
+        "settings_ai_tasks_title": "🧠 AI 任务与自演化设置",
+        "settings_auto_summary_label": "点击文章时自动生成 AI 摘要",
+        "settings_auto_summary_desc": "若关闭，则需要打开右侧对话框时才会按需生成摘要",
+        "settings_pregenerate_label": "精读文章后台预生成摘要",
+        "settings_pregenerate_desc": "启用后，后台会在拉取到 read 注意力档的文章时自动生成摘要",
+        "settings_stream_label": "流式输出摘要和聊天",
+        "settings_stream_desc": "启用后，摘要和右侧聊天会以打字机流式效果打字输出",
+        "settings_interest_profile_label": "阅读画像与智能分级",
+        "settings_interest_profile_desc": "开启后，系统将根据你的阅读习惯自动优化文章注意力分级。每日凌晨会消耗一次 AI 额度（约 2000-3000 token）用于分析阅读偏好。行为数据仅存储在本地。",
+        "settings_promote_threshold_label": "自动建抽屉频次阈值",
+        "settings_btn_manual_maintenance": "⚙️ 立即执行每日维护任务",
+        "settings_notifications_title": "📢 消息通知与应用角标 (PWA)",
+        "settings_badge_push_label": "未读数应用角标推送",
+        "settings_badge_push_desc": "开启后，手机/桌面主屏幕上应用图标将展示未读文章数量",
+        "settings_btn_badge_permission_enable": "🔔 开启推送权限",
+        "settings_btn_badge_permission_enabled": "✅ 已开启角标",
+        "settings_btn_badge_permission_denied": "❌ 已拒绝权限",
+        "settings_btn_badge_permission_unsupported": "⚠️ 浏览器不支持角标",
+        "settings_chat_config_title": "💬 对话 API 独立配置 (可选)",
+        "settings_chat_url_label": "对话 Base URL (留空默认使用全局)",
+        "settings_chat_key_label": "对话 API Key (可选，留空则继承全局)",
+        "settings_chat_model_label": "对话模型名称 (留空默认)",
+        "settings_chat_tokens_label": "对话 Token 限制",
+        "settings_api_base_placeholder": "例如 http://localhost:8888",
+        "settings_access_password_placeholder": "留空关闭密码验证...",
+        "settings_ai_url_placeholder": "留空以关闭 AI 功能...",
+        "settings_ai_key_placeholder": "输入密钥...",
+        "settings_chat_model_placeholder": "默认..."
     },
     "zh-hant": {
         "unread_articles": "未讀文章",
@@ -3937,7 +4104,7 @@ const TRANSLATIONS = {
         "clickbait_warn": "標題黨警告：",
         "save_success": "系統參數設置保存成功！",
         "save_failed": "保存設置失敗: ",
-        "load_failed": "獲取系統設置參數失敗！",
+        "load_failed": "獲取系統參數設置失敗！",
         "network_error": "保存參數設置出錯，請檢查網絡連接",
         "theme_light": "亮色模式",
         "theme_dark": "暗色模式",
@@ -3946,7 +4113,107 @@ const TRANSLATIONS = {
         "translating": "正在對照翻譯...",
         "show_original": "只看原文",
         "target_lang_label": "目標語言（摘要、翻譯、問答）",
-        "ui_lang_label": "系統界面語言"
+        "ui_lang_label": "系統界面語言",
+        "my_notes": "我的筆記",
+        "select_all": "全選",
+        "batch_export": "📥 批量導出",
+        "all_unread_header": "所有未讀",
+        "count_notes": "{count} 篇筆記",
+        "count_starred": "{count} 篇收藏",
+        "count_search": "{count} 篇結果",
+        "count_unread": "{count} 篇未讀",
+        "empty_state_title": "閱讀新視界",
+        "empty_state_desc": "選擇中欄文章，開啟 AI 一鍵摘要、標題黨識別與即時追問對話。",
+        "no_feeds_title": "暫無文章",
+        "no_feeds_desc": "請選擇左側分類，或導入新的訂閱源開始閱讀。",
+        "no_articles_title": "沒有找到文章",
+        "no_articles_desc": "該分類下目前沒有符合篩選條件的文章。",
+        "all_read_title": "所有文章已讀完",
+        "all_read_desc": "真棒！已清理完當前訂閱源的全部未讀。",
+        "add_feed_title": "新增訂閱源",
+        "add_feed_desc": "輸入任意 RSS/Atom 訂閱源鏈接，AI 將自動分析並創建分類。",
+        "feed_url_placeholder": "輸入訂閱源鏈接...",
+        "add_button_submit": "確定添加",
+        "cancel": "取消",
+        "import_opml_title": "導入 OPML 訂閱表",
+        "import_opml_desc": "選擇從其他閱讀器（如 Feedly, NetNewsWire）導出的 .opml 文件導入。",
+        "drop_zone_label": "點擊或拖拽 OPML 文件到這裡",
+        "import_button_submit": "開始導入",
+        "feed_management_tab": "訂閱源管理",
+        "system_settings_tab": "系統參數設置",
+        "manage_feeds_desc": "管理您的訂閱源（改名、啟用/禁用、刪除或備份導出）。",
+        "import_opml_btn": "導入 OPML",
+        "export_opml_btn": "導出 OPML",
+        "article_text_and_ai_summary": "文章正文與 AI 摘要",
+        "profile_title": "我的閱讀畫像",
+        "profile_tab_token": "📅 Token 統計",
+        "profile_tab_interest": "📊 興趣畫像",
+        "profile_habit_title": "🪙 一週每日 Token 統計",
+        "profile_habit_insight": "閱讀習慣分析中...",
+        "profile_label_category_distribution": "📊 分類閱讀分布",
+        "profile_label_stat_total": "近30天總閱讀",
+        "profile_label_stat_high": "深度閱讀 (讀)",
+        "profile_label_stat_low": "快速跳过 (看)",
+        "profile_label_tag_cloud": "🎯 興趣標籤雲 (點擊標籤查看詳情)",
+        "profile_detail_title": "話題詳情",
+        "profile_detail_label_count": "深度閱讀: {count} 篇",
+        "profile_detail_label_starred": "已收藏: {count} 篇",
+        "profile_detail_label_original": "訪問原文: {count} 次",
+        "profile_detail_label_trend": "近4周閱讀活躍度趨勢",
+        "profile_detail_label_articles": "代表文章",
+        "profile_label_heatmap": "📅 話題關注趨勢 (近4周)",
+        "profile_less": "少",
+        "profile_more": "多",
+        "profile_calculating": "正在計算閱讀偏好，提煉畫像數據...",
+        "profile_disabled_title": "智能畫像功能已關閉",
+        "profile_disabled_desc": "請在設置中開啟「閱讀畫像與智能分級」以啟用本功能。行為數據僅在本地采集，開啟偏好分析會每日自動執行一次AI歸納。",
+        "profile_cold_start_title": "智能畫像積累中",
+        "profile_cold_start_desc": "閱讀數據積累中，需至少15篇文章的閱讀行為。",
+        "profile_load_failed_desc": "無法獲取閱讀畫像數據，請稍後重試。",
+        "profile_default_insight": "這是 AI 默默窺探你 30 天後的鐵證。如果有些字小到要拿放大鏡看，別懷疑，那就是你嘴上高喊‘熱愛’卻連點都沒點過的葉公好龍型興趣。下次跟人假裝博學之前，建議先來這裡‘雨露均沾’一下，免得你的信息繭房厚到能防彈。",
+        "settings_server_security_title": "🌐 API 服務器與安全配置",
+        "settings_api_base_label": "後端 API 地址 (留空表示同域託管，例如 http://localhost:8888)",
+        "settings_access_password_label": "API 訪問密碼 (設置密碼以在公網啟用單密碼鎖定保護，留空則不開啟驗證)",
+        "settings_fetch_polling_title": "📡 抓取與輪詢設置",
+        "settings_fetch_interval_label": "抓取週期 (分鐘)",
+        "settings_min_text_chars_label": "全文判定長度閾值",
+        "settings_ai_endpoint_title": "🤖 默認 AI 端點配置 (可選)",
+        "settings_ai_url_label": "API Base URL",
+        "settings_ai_key_label": "API Key",
+        "settings_ai_model_label": "AI 模型名稱",
+        "settings_btn_test_llm": "檢查 LLM API 可用性",
+        "settings_token_consumption_label": "今日 AI Token 消耗 (Tokens):",
+        "settings_token_prompt": "輸入: ",
+        "settings_token_completion": "輸出: ",
+        "settings_token_total": "總計: ",
+        "settings_ai_tasks_title": "🧠 AI 任務與自演化設置",
+        "settings_auto_summary_label": "點擊文章時自動生成 AI 摘要",
+        "settings_auto_summary_desc": "若關閉，則需要打開右側對話框時才會按需生成摘要",
+        "settings_pregenerate_label": "精讀文章后台預生成摘要",
+        "settings_pregenerate_desc": "啟用後，后台會在拉取到 read 注意力檔的文章時自動生成摘要",
+        "settings_stream_label": "流式輸出摘要和聊天",
+        "settings_stream_desc": "啟用後，摘要和右侧聊天會以打字機流式效果打字輸出",
+        "settings_interest_profile_label": "閱讀畫像與智能分級",
+        "settings_interest_profile_desc": "開啟後，系統將根據你的閱讀習慣自動優化文章注意力分級。每日凌晨會消耗一次 AI 額度（約 2000-3000 token）用於分析閱讀偏好。行為數據僅存儲在本地。",
+        "settings_promote_threshold_label": "自動建抽屜頻次閾值",
+        "settings_btn_manual_maintenance": "⚙️ 立即執行每日維護任務",
+        "settings_notifications_title": "📢 消息通知與應用角標 (PWA)",
+        "settings_badge_push_label": "未讀數應用角標推送",
+        "settings_badge_push_desc": "開啟後，手機/桌面主屏幕上應用圖標將展示未讀文章數量",
+        "settings_btn_badge_permission_enable": "🔔 開啟推送權限",
+        "settings_btn_badge_permission_enabled": "✅ 已開啟角标",
+        "settings_btn_badge_permission_denied": "❌ 已拒絕權限",
+        "settings_btn_badge_permission_unsupported": "⚠️ 瀏覽器不支持角標",
+        "settings_chat_config_title": "💬 對話 API 獨立配置 (可選)",
+        "settings_chat_url_label": "對話 Base URL (留空默認使用全局)",
+        "settings_chat_key_label": "對話 API Key (可選，留空則繼承全局)",
+        "settings_chat_model_label": "對話模型名稱 (留空默認)",
+        "settings_chat_tokens_label": "對話 Token 限制",
+        "settings_api_base_placeholder": "例如 http://localhost:8888",
+        "settings_access_password_placeholder": "留空關閉密碼驗證...",
+        "settings_ai_url_placeholder": "留空以關閉 AI 功能...",
+        "settings_ai_key_placeholder": "輸入金鑰...",
+        "settings_chat_model_placeholder": "默認..."
     },
     en: {
         "unread_articles": "Unread Articles",
@@ -3991,7 +4258,107 @@ const TRANSLATIONS = {
         "translating": "Translating...",
         "show_original": "Show Original Only",
         "target_lang_label": "Target Language (Summary, Translation, Q&A)",
-        "ui_lang_label": "UI Language"
+        "ui_lang_label": "UI Language",
+        "my_notes": "My Notes",
+        "select_all": "Select All",
+        "batch_export": "📥 Batch Export",
+        "all_unread_header": "All Unread",
+        "count_notes": "{count} notes",
+        "count_starred": "{count} favorites",
+        "count_search": "{count} results",
+        "count_unread": "{count} unread",
+        "empty_state_title": "New Horizon of Reading",
+        "empty_state_desc": "Select an article from the middle column to enable AI summary, clickbait detection, and follow-up Q&A.",
+        "no_feeds_title": "No Articles",
+        "no_feeds_desc": "Please select a category on the left, or import new feeds to start reading.",
+        "no_articles_title": "No Articles Found",
+        "no_articles_desc": "There are currently no articles in this category matching the filters.",
+        "all_read_title": "All Articles Read",
+        "all_read_desc": "Awesome! You have cleared all unread articles from this feed.",
+        "add_feed_title": "Add New Feed",
+        "add_feed_desc": "Enter any RSS/Atom feed URL, and AI will analyze and categorize it automatically.",
+        "feed_url_placeholder": "Enter feed URL...",
+        "add_button_submit": "Add Feed",
+        "cancel": "Cancel",
+        "import_opml_title": "Import OPML File",
+        "import_opml_desc": "Select a .opml file exported from other readers (e.g. Feedly, NetNewsWire) to import.",
+        "drop_zone_label": "Click or drag OPML file here",
+        "import_button_submit": "Start Import",
+        "feed_management_tab": "Feed Management",
+        "system_settings_tab": "Settings",
+        "manage_feeds_desc": "Manage your feeds (rename, enable/disable, delete, or backup export).",
+        "import_opml_btn": "Import OPML",
+        "export_opml_btn": "Export OPML",
+        "article_text_and_ai_summary": "Article Body & AI Summary",
+        "profile_title": "My Reading Profile",
+        "profile_tab_token": "📅 Token Stats",
+        "profile_tab_interest": "📊 Interests",
+        "profile_habit_title": "🪙 Weekly Token Consumption Stats",
+        "profile_habit_insight": "Analyzing reading habits...",
+        "profile_label_category_distribution": "📊 Category Reading Distribution",
+        "profile_label_stat_total": "Total Read (30d)",
+        "profile_label_stat_high": "Deep Read",
+        "profile_label_stat_low": "Quick Skip",
+        "profile_label_tag_cloud": "🎯 Interest Tag Cloud (Click for details)",
+        "profile_detail_title": "Topic Details",
+        "profile_detail_label_count": "Deep Read: {count} articles",
+        "profile_detail_label_starred": "Starred: {count} articles",
+        "profile_detail_label_original": "Original Visits: {count} times",
+        "profile_detail_label_trend": "4-Week Reading Activity Trend",
+        "profile_detail_label_articles": "Representative Articles",
+        "profile_label_heatmap": "📅 Topic Attention Trend (Last 4 Weeks)",
+        "profile_less": "Less",
+        "profile_more": "More",
+        "profile_calculating": "Calculating reading preferences and extracting profile data...",
+        "profile_disabled_title": "Intelligent Profile is Disabled",
+        "profile_disabled_desc": "Please enable 'Reading Profile & Intelligent Categorization' in Settings to use this feature. Data is collected locally, and AI summarization runs once daily.",
+        "profile_cold_start_title": "Accumulating Data",
+        "profile_cold_start_desc": "Gathering reading data. Requires at least 15 read articles.",
+        "profile_load_failed_desc": "Unable to load reading profile, please try again later.",
+        "profile_default_insight": "This is proof that the AI has been quietly observing you for 30 days. If some tags are too small to read, that's your 'surface interest' which you talk about but never click. Next time you pretend to be knowledgeable, check here first so you don't expose yourself.",
+        "settings_server_security_title": "🌐 API Server & Security",
+        "settings_api_base_label": "Backend API Base URL (Leave empty for same domain)",
+        "settings_access_password_label": "API Access Password (Leave empty for no authentication)",
+        "settings_fetch_polling_title": "📡 Ingestion & Polling",
+        "settings_fetch_interval_label": "Fetch Interval (Minutes)",
+        "settings_min_text_chars_label": "Min Fulltext Length Threshold",
+        "settings_ai_endpoint_title": "🤖 Default AI Endpoint Configuration (Optional)",
+        "settings_ai_url_label": "API Base URL",
+        "settings_ai_key_label": "API Key",
+        "settings_ai_model_label": "AI Model Name",
+        "settings_btn_test_llm": "Check LLM API Availability",
+        "settings_token_consumption_label": "Today's AI Token Consumption (Tokens):",
+        "settings_token_prompt": "Prompt: ",
+        "settings_token_completion": "Completion: ",
+        "settings_token_total": "Total: ",
+        "settings_ai_tasks_title": "🧠 AI Tasks & Self-Evolution",
+        "settings_auto_summary_label": "Automatically generate AI summary when clicking articles",
+        "settings_auto_summary_desc": "If disabled, summary is only generated when chat panel is opened",
+        "settings_pregenerate_label": "Pre-generate summary for 'read' attention articles",
+        "settings_pregenerate_desc": "When enabled, summaries will be pre-generated for high-attention articles in background",
+        "settings_stream_label": "Stream summary and chat outputs",
+        "settings_stream_desc": "When enabled, summary and chat will print using typewriter stream effect",
+        "settings_interest_profile_label": "Reading Profile & Intelligent Categorization",
+        "settings_interest_profile_desc": "If enabled, attention categorization will optimize automatically. Once a day at midnight, ~2-3k tokens will be consumed to analyze preferences. Data is local only.",
+        "settings_promote_threshold_label": "Auto Category Promotion Threshold",
+        "settings_btn_manual_maintenance": "⚙️ Run Daily Maintenance Task Now",
+        "settings_notifications_title": "📢 Push Notifications & App Badge (PWA)",
+        "settings_badge_push_label": "Unread Count App Badge Push",
+        "settings_badge_push_desc": "When enabled, home screen app icon shows the count of unread articles",
+        "settings_btn_badge_permission_enable": "🔔 Enable Push Permissions",
+        "settings_btn_badge_permission_enabled": "✅ Badge Enabled",
+        "settings_btn_badge_permission_denied": "❌ Permission Denied",
+        "settings_btn_badge_permission_unsupported": "⚠️ Badge Unsupported",
+        "settings_chat_config_title": "💬 Independent Chat API Config (Optional)",
+        "settings_chat_url_label": "Chat Base URL (Leave empty to inherit global)",
+        "settings_chat_key_label": "Chat API Key (Leave empty to inherit global)",
+        "settings_chat_model_label": "Chat Model Name (Leave empty for default)",
+        "settings_chat_tokens_label": "Chat Token Limit",
+        "settings_api_base_placeholder": "e.g. http://localhost:8888",
+        "settings_access_password_placeholder": "Leave empty to disable password verification...",
+        "settings_ai_url_placeholder": "Leave empty to disable AI features...",
+        "settings_ai_key_placeholder": "Enter API key...",
+        "settings_chat_model_placeholder": "Default..."
     },
     ja: {
         "unread_articles": "未読記事",
@@ -4027,7 +4394,7 @@ const TRANSLATIONS = {
         "clickbait_warn": "クリックベイト警告：",
         "save_success": "システム設定が正常に保存されました！",
         "save_failed": "設定の保存に失敗しました: ",
-        "load_failed": "システム設定의取得に失敗しました！",
+        "load_failed": "システム設定の取得に失敗しました！",
         "network_error": "設定の保存エラー、ネットワーク接続を確認してください。",
         "theme_light": "ライトモード",
         "theme_dark": "ダークモード",
@@ -4036,7 +4403,107 @@ const TRANSLATIONS = {
         "translating": "翻訳中...",
         "show_original": "原文のみ表示",
         "target_lang_label": "対象言語（要約、翻訳、Q&A）",
-        "ui_lang_label": "UI言語"
+        "ui_lang_label": "UI言語",
+        "my_notes": "ノート",
+        "select_all": "すべて選択",
+        "batch_export": "📥 一括書き出し",
+        "all_unread_header": "すべての未読",
+        "count_notes": "{count} 件のノート",
+        "count_starred": "{count} 件のお気に入り",
+        "count_search": "{count} 件の結果",
+        "count_unread": "{count} 件の未読",
+        "empty_state_title": "読書の新たな視野",
+        "empty_state_desc": "中央のカラムから記事を選択すると、AI要約、クリックベイト検出、AIとの対話が可能になります。",
+        "no_feeds_title": "記事がありません",
+        "no_feeds_desc": "左側のカテゴリを選択するか、新しいフィードをインポートして読み始めましょう。",
+        "no_articles_title": "記事が見つかりません",
+        "no_articles_desc": "このカテゴリにはフィルターに一致する記事がありません。",
+        "all_read_title": "すべての記事が既読です",
+        "all_read_desc": "素晴らしい！このフィードの未読記事をすべてクリアしました。",
+        "add_feed_title": "フィードを追加",
+        "add_feed_desc": "RSS/AtomフィードのURLを入力すると、AIが自動的に分析してカテゴリを作成します。",
+        "feed_url_placeholder": "フィードのURLを入力...",
+        "add_button_submit": "追加する",
+        "cancel": "キャンセル",
+        "import_opml_title": "OPMLをインポート",
+        "import_opml_desc": "他のリーダー（Feedly、NetNewsWireなど）からエクスポートした.opmlファイルを選択してインポートします。",
+        "drop_zone_label": "ここをクリックまたはOPMLファイルをドラッグ＆ドロップ",
+        "import_button_submit": "インポートを開始",
+        "feed_management_tab": "フィード管理",
+        "system_settings_tab": "システム設定",
+        "manage_feeds_desc": "フィードの管理（名前変更、有効/無効化、削除、バックアップ書き出し）。",
+        "import_opml_btn": "OPMLインポート",
+        "export_opml_btn": "OPMLエクスポート",
+        "article_text_and_ai_summary": "本文とAI要約",
+        "profile_title": "マイリーディングプロファイル",
+        "profile_tab_token": "📅 Token統計",
+        "profile_tab_interest": "📊 興味マップ",
+        "profile_habit_title": "🪙 週刊Token消耗統計",
+        "profile_habit_insight": "読書習慣を分析中...",
+        "profile_label_category_distribution": "📊 カテゴリ別読書分布",
+        "profile_label_stat_total": "読書総数 (30日)",
+        "profile_label_stat_high": "精読 (読)",
+        "profile_label_stat_low": "流し読み (看)",
+        "profile_label_tag_cloud": "🎯 興味タグクラウド (クリックで詳細)",
+        "profile_detail_title": "トピック詳細",
+        "profile_detail_label_count": "精読: {count} 件",
+        "profile_detail_label_starred": "お気に入り: {count} 件",
+        "profile_detail_label_original": "原文アクセス: {count} 回",
+        "profile_detail_label_trend": "過去4週間の読書アクティビティ傾向",
+        "profile_detail_label_articles": "代表的な記事",
+        "profile_label_heatmap": "📅 トピック注目傾向 (過去4週間)",
+        "profile_less": "少",
+        "profile_more": "多",
+        "profile_calculating": "読書の好みを計算し、プロファイルデータを抽出中...",
+        "profile_disabled_title": "読書プロファイル機能は無効です",
+        "profile_disabled_desc": "この機能を使用するには、設定で「読書プロファイルとインテリジェント分類」を有効にしてください。データはローカルにのみ保存されます。",
+        "profile_cold_start_title": "データを蓄積中",
+        "profile_cold_start_desc": "読書データを収集中です。少なくとも15件の記事を読む必要があります。",
+        "profile_load_failed_desc": "読書プロファイルを読み込めません。後でやり直してください。",
+        "profile_default_insight": "これはAIがあなたの30日間の読書を静かに観察した結果です。タグが小さいほど、あなたが「興味がある」と口では言いつつも実際には全くクリックしなかったトピックです。次回知ったかぶりをする前に、ここで確認しておきましょう。",
+        "settings_server_security_title": "🌐 APIサーバーとセキュリティ設定",
+        "settings_api_base_label": "バックエンドAPIアドレス (空欄で同ドメイン、例: http://localhost:8888)",
+        "settings_access_password_label": "APIアクセスパスワード (空欄で認証なし)",
+        "settings_fetch_polling_title": "📡 取得およびポーリング設定",
+        "settings_fetch_interval_label": "取得周期 (分)",
+        "settings_min_text_chars_label": "全文判定文字数しきい値",
+        "settings_ai_endpoint_title": "🤖 デフォルトAIエンドポイント設定 (任意)",
+        "settings_ai_url_label": "API Base URL",
+        "settings_ai_key_label": "API Key",
+        "settings_ai_model_label": "AIモデル名",
+        "settings_btn_test_llm": "LLM APIの可用性を確認",
+        "settings_token_consumption_label": "本日のAI Token消費量 (Tokens):",
+        "settings_token_prompt": "プロンプト: ",
+        "settings_token_completion": "完了: ",
+        "settings_token_total": "合計: ",
+        "settings_ai_tasks_title": "🧠 AIタスクと自己進化設定",
+        "settings_auto_summary_label": "記事クリック時にAI要約を自动生成する",
+        "settings_auto_summary_desc": "無効な場合、チャットパネルを開いたときにのみ要約が生成されます",
+        "settings_pregenerate_label": "「精読」記事の要約をバックグラウンドで事前生成する",
+        "settings_pregenerate_desc": "有効な場合、バックグラウンドで高注目記事の要約が自動生成されます",
+        "settings_stream_label": "要約とチャットをストリーム出力する",
+        "settings_stream_desc": "有効な場合、要約とチャットはタイプライター風にストリーム出力されます",
+        "settings_interest_profile_label": "読書プロファイルとインテリジェント分類",
+        "settings_interest_profile_desc": "有効な場合、注目度に基づく分類が自動的に最適化されます。毎日午前0時に好みの分析のために約2-3kトークンが消費されます。データはローカルにのみ保存されます。",
+        "settings_promote_threshold_label": "自動カテゴリ昇格しきい値",
+        "settings_btn_manual_maintenance": "⚙️ デイリーメンテナンスを今すぐ実行",
+        "settings_notifications_title": "📢 プッシュ通知とアプリアイコンバッジ (PWA)",
+        "settings_badge_push_label": "未読数のアプリアイコンバッジ表示",
+        "settings_badge_push_desc": "有効な場合、ホーム画面のアイコンに未読記事数がバッジ表示されます",
+        "settings_btn_badge_permission_enable": "🔔 プッシュ通知権限を有効にする",
+        "settings_btn_badge_permission_enabled": "✅ バッジ有効",
+        "settings_btn_badge_permission_denied": "❌ 権限が拒否されました",
+        "settings_btn_badge_permission_unsupported": "⚠️ バッジ未サポート",
+        "settings_chat_config_title": "💬 独立したチャットAPI設定 (任意)",
+        "settings_chat_url_label": "チャットBase URL (空欄でグローバルを継承)",
+        "settings_chat_key_label": "チャットAPI Key (任意、空欄でグローバルを継承)",
+        "settings_chat_model_label": "チャットモデル名 (空欄でデフォルト)",
+        "settings_chat_tokens_label": "チャットToken制限",
+        "settings_api_base_placeholder": "例: http://localhost:8888",
+        "settings_access_password_placeholder": "空欄でパスワード検証を無効にする...",
+        "settings_ai_url_placeholder": "空欄でAI機能を無効化...",
+        "settings_ai_key_placeholder": "APIキーを入力...",
+        "settings_chat_model_placeholder": "デフォルト..."
     },
     ko: {
         "unread_articles": "읽지 않은 글",
@@ -4081,7 +4548,107 @@ const TRANSLATIONS = {
         "translating": "번역 중...",
         "show_original": "원본만 보기",
         "target_lang_label": "대상 언어 (요약, 번역, Q&A)",
-        "ui_lang_label": "UI 언어"
+        "ui_lang_label": "UI 언어",
+        "my_notes": "내 노트",
+        "select_all": "전체 선택",
+        "batch_export": "📥 일괄 내보내기",
+        "all_unread_header": "읽지 않은 모든 글",
+        "count_notes": "{count}개의 노트",
+        "count_starred": "{count}개의 즐겨찾기",
+        "count_search": "{count}개의 결과",
+        "count_unread": "{count}개의 읽지 않음",
+        "empty_state_title": "독서의 새로운 세계",
+        "empty_state_desc": "가운데 목록에서 글을 선택하여 AI 요약, 낚시성 기사 경고 및 즉각적인 대화를 시작해 보세요.",
+        "no_feeds_title": "글이 없습니다",
+        "no_feeds_desc": "왼쪽 카테고리를 선택하거나 새 구독 피드를 가져와서 읽기를 시작하세요.",
+        "no_articles_title": "글을 찾을 수 없습니다",
+        "no_articles_desc": "현재 이 카테고리에 필터와 일치하는 글이 없습니다.",
+        "all_read_title": "모든 글을 읽었습니다",
+        "all_read_desc": "멋져요! 이 피드의 읽지 않은 글을 모두 읽었습니다.",
+        "add_feed_title": "새 피드 추가",
+        "add_feed_desc": "RSS/Atom 피드 주소를 입력하면 AI가 자동으로 분석하여 카테고리를 생성합니다.",
+        "feed_url_placeholder": "피드 주소 입력...",
+        "add_button_submit": "추가하기",
+        "cancel": "취소",
+        "import_opml_title": "OPML 가져오기",
+        "import_opml_desc": "다른 리더기(예: Feedly, NetNewsWire)에서 내보낸 .opml 파일을 선택하여 가져옵니다.",
+        "drop_zone_label": "여기를 클릭하거나 OPML 파일을 드래그하여 업로드하세요",
+        "import_button_submit": "가져오기 시작",
+        "feed_management_tab": "피드 관리",
+        "system_settings_tab": "시스템 설정",
+        "manage_feeds_desc": "피드 관리 (이름 변경, 활성/비활성, 삭제 또는 백업 내보내기).",
+        "import_opml_btn": "OPML 가져오기",
+        "export_opml_btn": "OPML 내보내기",
+        "article_text_and_ai_summary": "본문 및 AI 요약",
+        "profile_title": "내 독서 프로필",
+        "profile_tab_token": "📅 토큰 통계",
+        "profile_tab_interest": "📊 관심 분야",
+        "profile_habit_title": "🪙 주간 토큰 소비 통계",
+        "profile_habit_insight": "독서 습관 분석 중...",
+        "profile_label_category_distribution": "📊 카테고리별 독서 분포",
+        "profile_label_stat_total": "총 독서량 (30일)",
+        "profile_label_stat_high": "정독 (독)",
+        "profile_label_stat_low": "속독 (간)",
+        "profile_label_tag_cloud": "🎯 관심 태그 클라우드 (클릭하여 상세 보기)",
+        "profile_detail_title": "주제 상세 정보",
+        "profile_detail_label_count": "정독: {count}개",
+        "profile_detail_label_starred": "즐겨찾기: {count}개",
+        "profile_detail_label_original": "원본 방문: {count}회",
+        "profile_detail_label_trend": "최근 4주간 독서 활동 트렌드",
+        "profile_detail_label_articles": "대표 글",
+        "profile_label_heatmap": "📅 주제 주목도 추이 (최근 4주)",
+        "profile_less": "적음",
+        "profile_more": "많음",
+        "profile_calculating": "독서 선호도를 계산하고 프로필 데이터를 추출하는 중...",
+        "profile_disabled_title": "독서 프로필 기능이 비활성화되었습니다",
+        "profile_disabled_desc": "이 기능을 사용하려면 설정에서 '독서 프로필 및 지능형 분류'를 활성화하세요. 데이터는 기기 로컬에만 저장됩니다.",
+        "profile_cold_start_title": "데이터 분석 중",
+        "profile_cold_start_desc": "독서 데이터를 수집하는 중입니다. 최소 15개의 글을 읽어야 합니다.",
+        "profile_load_failed_desc": "독서 프로필을 로드할 수 없습니다. 나중에 다시 시도해 주세요.",
+        "profile_default_insight": "이것은 AI가 30일 동안 당신의 독서를 조용히 관찰한 증거입니다. 태그 크기가 작을수록 입으로는 '관심 있다'고 하지만 실제로는 거의 클릭하지 않은 주제입니다. 아는 척하기 전에 여기서 먼저 확인해 보세요.",
+        "settings_server_security_title": "🌐 API 서버 및 보안 설정",
+        "settings_api_base_label": "백엔드 API 주소 (공란 시 동일 도메인, 예: http://localhost:8888)",
+        "settings_access_password_label": "API 액세스 비밀번호 (공란 시 인증 없음)",
+        "settings_fetch_polling_title": "📡 수집 및 폴링 설정",
+        "settings_fetch_interval_label": "수집 주기 (분)",
+        "settings_min_text_chars_label": "본문 판단 최소 자수 기준",
+        "settings_ai_endpoint_title": "🤖 기본 AI 엔드포인트 설정 (선택 사항)",
+        "settings_ai_url_label": "API Base URL",
+        "settings_ai_key_label": "API Key",
+        "settings_ai_model_label": "AI 모델명",
+        "settings_btn_test_llm": "LLM API 가용성 확인",
+        "settings_token_consumption_label": "오늘의 AI 토큰 소비량 (Tokens):",
+        "settings_token_prompt": "입력: ",
+        "settings_token_completion": "출력: ",
+        "settings_token_total": "합계: ",
+        "settings_ai_tasks_title": "🧠 AI 작업 및 자기 진화 설정",
+        "settings_auto_summary_label": "글 클릭 시 AI 요약 자동 생성",
+        "settings_auto_summary_desc": "비활성화 시, 채팅창을 열 때만 요약이 생성됩니다",
+        "settings_pregenerate_label": "높은 주목도 글의 요약을 백그라운드에서 사전 생성",
+        "settings_pregenerate_desc": "활성화 시, 백그라운드에서 고주목도 글의 요약이 자동 생성됩니다",
+        "settings_stream_label": "요약 및 채팅 스트리밍 출력",
+        "settings_stream_desc": "활성화 시, 요약과 채팅 내용이 타이핑 효과와 함께 스트리밍 출력됩니다",
+        "settings_interest_profile_label": "독서 프로필 및 지능형 분류",
+        "settings_interest_profile_desc": "활성화 시, 독서 습관에 따라 글의 주목도 분류가 자동으로 최적화됩니다. 매일 자정에 분석을 위해 약 2~3k 토큰이 소비됩니다. 데이터는 로컬에만 저장됩니다.",
+        "settings_promote_threshold_label": "자동 카테고리 승격 기준",
+        "settings_btn_manual_maintenance": "⚙️ 데일리 유지 관리 지금 실행",
+        "settings_notifications_title": "📢 푸시 알림 및 앱 배지 (PWA)",
+        "settings_badge_push_label": "읽지 않은 수 앱 아이콘 배지 표시",
+        "settings_badge_push_desc": "활성화 시, 홈 화면의 앱 아이콘에 읽지 않은 글 수가 표시됩니다",
+        "settings_btn_badge_permission_enable": "🔔 푸시 권한 활성화",
+        "settings_btn_badge_permission_enabled": "✅ 배지 활성화됨",
+        "settings_btn_badge_permission_denied": "❌ 권한 거부됨",
+        "settings_btn_badge_permission_unsupported": "⚠️ 배지 미지원",
+        "settings_chat_config_title": "💬 독립적인 채팅 API 설정 (선택 사항)",
+        "settings_chat_url_label": "채팅 Base URL (공란 시 글로벌 설정 상속)",
+        "settings_chat_key_label": "채팅 API Key (선택 사항, 공란 시 글로벌 설정 상속)",
+        "settings_chat_model_label": "채팅 모델명 (공란 시 기본값)",
+        "settings_chat_tokens_label": "채팅 토큰 제한",
+        "settings_api_base_placeholder": "예: http://localhost:8888",
+        "settings_access_password_placeholder": "비밀번호 검증을 비활성화하려면 비워 둠...",
+        "settings_ai_url_placeholder": "AI 기능을 비활성화하려면 비워 둠...",
+        "settings_ai_key_placeholder": "API 키 입력...",
+        "settings_chat_model_placeholder": "기본..."
     },
     fr: {
         "unread_articles": "Articles non lus",
@@ -4126,7 +4693,107 @@ const TRANSLATIONS = {
         "translating": "Traduction en cours...",
         "show_original": "Afficher l'original",
         "target_lang_label": "Langue cible (Résumé, Traduction, Q&R)",
-        "ui_lang_label": "Langue de l'interface"
+        "ui_lang_label": "Langue de l'interface",
+        "my_notes": "Mes notes",
+        "select_all": "Tout sélectionner",
+        "batch_export": "📥 Exportation par lot",
+        "all_unread_header": "Tout non lu",
+        "count_notes": "{count} notes",
+        "count_starred": "{count} favoris",
+        "count_search": "{count} résultats",
+        "count_unread": "{count} non lus",
+        "empty_state_title": "Nouvel horizon de lecture",
+        "empty_state_desc": "Sélectionnez un article pour activer le résumé IA, la détection de clickbait et le chat.",
+        "no_feeds_title": "Aucun article",
+        "no_feeds_desc": "Sélectionnez une catégorie à gauche, ou importez de nouveaux flux pour commencer à lire.",
+        "no_articles_title": "Aucun article trouvé",
+        "no_articles_desc": "Il n'y a actuellement aucun article correspondant aux filtres dans cette catégorie.",
+        "all_read_title": "Tous les articles sont lus",
+        "all_read_desc": "Génial ! Vous avez effacé tous les articles non lus de ce flux.",
+        "add_feed_title": "Ajouter un flux",
+        "add_feed_desc": "Entrez l'URL d'un flux RSS/Atom, l'IA l'analysera et le catégorisera automatiquement.",
+        "feed_url_placeholder": "Saisir l'URL du flux...",
+        "add_button_submit": "Ajouter",
+        "cancel": "Annuler",
+        "import_opml_title": "Importer un fichier OPML",
+        "import_opml_desc": "Sélectionnez un fichier .opml exporté d'autres lecteurs (ex. Feedly, NetNewsWire) à importer.",
+        "drop_zone_label": "Cliquez ou glissez le fichier OPML ici",
+        "import_button_submit": "Lancer l'importation",
+        "feed_management_tab": "Gestion des flux",
+        "system_settings_tab": "Paramètres",
+        "manage_feeds_desc": "Gérer vos flux (renommer, activer/désactiver, supprimer ou exporter).",
+        "import_opml_btn": "Importer OPML",
+        "export_opml_btn": "Exporter OPML",
+        "article_text_and_ai_summary": "Texte & Résumé IA",
+        "profile_title": "Mon profil de lecture",
+        "profile_tab_token": "📅 Jetons",
+        "profile_tab_interest": "📊 Intérêts",
+        "profile_habit_title": "🪙 Stats de consommation de jetons hebdomadaire",
+        "profile_habit_insight": "Analyse des habitudes de lecture...",
+        "profile_label_category_distribution": "📊 Répartition des lectures par catégorie",
+        "profile_label_stat_total": "Total lus (30j)",
+        "profile_label_stat_high": "Lecture attentive",
+        "profile_label_stat_low": "Survol rapide",
+        "profile_label_tag_cloud": "🎯 Nuage d'intérêts (Cliquer pour détails)",
+        "profile_detail_title": "Détails du sujet",
+        "profile_detail_label_count": "Lecture attentive : {count} articles",
+        "profile_detail_label_starred": "Favoris : {count} articles",
+        "profile_detail_label_original": "Visites de l'original : {count} fois",
+        "profile_detail_label_trend": "Tendance d'activité (4 semaines)",
+        "profile_detail_label_articles": "Articles représentatifs",
+        "profile_label_heatmap": "📅 Tendance d'attention (4 semaines)",
+        "profile_less": "Moins",
+        "profile_more": "Plus",
+        "profile_calculating": "Calcul des préférences et extraction des données...",
+        "profile_disabled_title": "Profil de lecture désactivé",
+        "profile_disabled_desc": "Veuillez activer le 'Profil de lecture & Catégorisation intelligente' dans les paramètres pour utiliser cette fonctionnalité.",
+        "profile_cold_start_title": "Accumulation de données",
+        "profile_cold_start_desc": "Collecte en cours. Recommandé : lire au moins 15 articles.",
+        "profile_load_failed_desc": "Impossible de charger le profil de lecture, veuillez réessayer plus tard.",
+        "profile_default_insight": "C'est la preuve que l'IA vous a observé pendant 30 jours. Plus un sujet est précieux, plus vous y portez un faux intérêt. Vérifiez ici avant de prétendre être savant sur un sujet.",
+        "settings_server_security_title": "🌐 API Serveur & Sécurité",
+        "settings_api_base_label": "URL de base de l'API (Laisser vide pour même domaine)",
+        "settings_access_password_label": "API Mot de passe (Laisser vide pour aucune authentification)",
+        "settings_fetch_polling_title": "📡 Ingestion & Actualisation",
+        "settings_fetch_interval_label": "Intervalle de récupération (minutes)",
+        "settings_min_text_chars_label": "Seuil de longueur du texte complet",
+        "settings_ai_endpoint_title": "🤖 Configuration de l'endpoint IA par défaut (Optionnel)",
+        "settings_ai_url_label": "API Base URL",
+        "settings_ai_key_label": "Clé API",
+        "settings_ai_model_label": "Nom du modèle IA",
+        "settings_btn_test_llm": "Tester la disponibilité de l'API LLM",
+        "settings_token_consumption_label": "Consommation de jetons IA d'aujourd'hui (Jetons) :",
+        "settings_token_prompt": "Invite : ",
+        "settings_token_completion": "Complétion : ",
+        "settings_token_total": "Total : ",
+        "settings_ai_tasks_title": "🧠 Tâches IA & Auto-évolution",
+        "settings_auto_summary_label": "Générer automatiquement le résumé IA en cliquant sur un article",
+        "settings_auto_summary_desc": "Si désactivé, le résumé n'est généré que lorsque le panneau de discussion est ouvert",
+        "settings_pregenerate_label": "Pré-générer les résumés des articles de haute attention en arrière-plan",
+        "settings_pregenerate_desc": "Si activé, les résumés des articles à haute attention seront générés automatiquement en tâche de fond",
+        "settings_stream_label": "Sortie des résultats IA en streaming",
+        "settings_stream_desc": "Si activé, les résumés et discussions s'afficheront en streaming",
+        "settings_interest_profile_label": "Profil de lecture & Catégorisation intelligente",
+        "settings_interest_profile_desc": "Si activé, la catégorisation intelligente s'optimisera. Analyse quotidienne automatique nécessitant 2-3k jetons.",
+        "settings_promote_threshold_label": "Seuil de promotion automatique des catégories",
+        "settings_btn_manual_maintenance": "⚙️ Lancer la maintenance quotidienne maintenant",
+        "settings_notifications_title": "📢 Notifications & Badge d'application (PWA)",
+        "settings_badge_push_label": "Notification du badge d'application",
+        "settings_badge_push_desc": "Si activé, le badge d'icône d'application affichera le nombre d'articles non lus",
+        "settings_btn_badge_permission_enable": "🔔 Activer les permissions push",
+        "settings_btn_badge_permission_enabled": "✅ Badge activé",
+        "settings_btn_badge_permission_denied": "❌ Permission refusée",
+        "settings_btn_badge_permission_unsupported": "⚠️ Badge non supporté",
+        "settings_chat_config_title": "💬 Configuration indépendante de l'API chat (Optionnel)",
+        "settings_chat_url_label": "Chat API Base URL (Laisser vide pour hériter du global)",
+        "settings_chat_key_label": "Clé API chat (Optionnel, laisser vide pour hériter du global)",
+        "settings_chat_model_label": "Nom du modèle chat (Laisser vide pour défaut)",
+        "settings_chat_tokens_label": "Limite de jetons chat",
+        "settings_api_base_placeholder": "ex. http://localhost:8888",
+        "settings_access_password_placeholder": "Laisser vide pour désactiver l'authentification...",
+        "settings_ai_url_placeholder": "Laisser vide pour désactiver l'IA...",
+        "settings_ai_key_placeholder": "Saisir la clé API...",
+        "settings_chat_model_placeholder": "Par défaut..."
     },
     es: {
         "unread_articles": "Artículos no leídos",
@@ -4171,7 +4838,107 @@ const TRANSLATIONS = {
         "translating": "Traduciendo...",
         "show_original": "Mostrar solo original",
         "target_lang_label": "Idioma objetivo (Resumen, Traducción, Preguntas)",
-        "ui_lang_label": "Idioma de la interfaz"
+        "ui_lang_label": "Idioma de la interfaz",
+        "my_notes": "Mis notas",
+        "select_all": "Seleccionar todo",
+        "batch_export": "📥 Exportación por lotes",
+        "all_unread_header": "Todos los no leídos",
+        "count_notes": "{count} notas",
+        "count_starred": "{count} favoritos",
+        "count_search": "{count} resultados",
+        "count_unread": "{count} no leídos",
+        "empty_state_title": "Nuevo horizonte de lectura",
+        "empty_state_desc": "Seleccione un artículo para habilitar el resumen de IA, detección de clickbait y chat.",
+        "no_feeds_title": "No hay artículos",
+        "no_feeds_desc": "Seleccione una categoría a la izquierda, o importe nuevos canales para comenzar a leer.",
+        "no_articles_title": "No se encontraron artículos",
+        "no_articles_desc": "Actualmente no hay artículos en esta categoría que coincidan con los filtros.",
+        "all_read_title": "Todos los artículos leídos",
+        "all_read_desc": "¡Excelente! Has limpiado todos los artículos no leídos de este canal.",
+        "add_feed_title": "Añadir canal",
+        "add_feed_desc": "Ingrese cualquier URL de canal RSS/Atom, y la IA lo analizará y clasificará automáticamente.",
+        "feed_url_placeholder": "Ingresar URL del canal...",
+        "add_button_submit": "Añadir",
+        "cancel": "Cancelar",
+        "import_opml_title": "Importar archivo OPML",
+        "import_opml_desc": "Seleccione un archivo .opml exportado de otros lectores (por ejemplo, Feedly, NetNewsWire) para importar.",
+        "drop_zone_label": "Haga clic o arrastre el archivo OPML aquí",
+        "import_button_submit": "Iniciar importación",
+        "feed_management_tab": "Gestión de canales",
+        "system_settings_tab": "Configuración",
+        "manage_feeds_desc": "Gestione sus canales (renombrar, habilitar/deshabilitar, eliminar o exportar).",
+        "import_opml_btn": "Importar OPML",
+        "export_opml_btn": "Exportar OPML",
+        "article_text_and_ai_summary": "Texto y resumen de IA",
+        "profile_title": "Mi perfil de lectura",
+        "profile_tab_token": "📅 Tokens",
+        "profile_tab_interest": "📊 Intereses",
+        "profile_habit_title": "🪙 Estadísticas de consumo semanal de tokens",
+        "profile_habit_insight": "Analizando hábitos de lectura...",
+        "profile_label_category_distribution": "📊 Distribución de lecturas por categoría",
+        "profile_label_stat_total": "Total leídos (30d)",
+        "profile_label_stat_high": "Lectura profunda",
+        "profile_label_stat_low": "Salto rápido",
+        "profile_label_tag_cloud": "🎯 Nube de etiquetas de intereses (Clic para ver detalles)",
+        "profile_detail_title": "Detalles del tema",
+        "profile_detail_label_count": "Lectura profunda: {count} artículos",
+        "profile_detail_label_starred": "Favoritos: {count} artículos",
+        "profile_detail_label_original": "Visitas al original: {count} veces",
+        "profile_detail_label_trend": "Tendencia de actividad de lectura (4 semanas)",
+        "profile_detail_label_articles": "Artículos representativos",
+        "profile_label_heatmap": "📅 Tendencia de atención al tema (4 semanas)",
+        "profile_less": "Menos",
+        "profile_more": "Más",
+        "profile_calculating": "Calculando preferencias y extrayendo datos del perfil...",
+        "profile_disabled_title": "Perfil de lectura desactivado",
+        "profile_disabled_desc": "Habilite 'Perfil de lectura y categorización inteligente' en la configuración para usar esta función.",
+        "profile_cold_start_title": "Acumulando datos",
+        "profile_cold_start_desc": "Recopilando datos de lectura. Requiere al menos 15 artículos leídos.",
+        "profile_load_failed_desc": "No se pudo cargar el perfil de lectura, por favor intente más tarde.",
+        "profile_default_insight": "Esta es la prueba de que la IA te ha estado observando durante 30 días. Los temas pequeños son tu falso interés que dices tener pero nunca lees. Verifica aquí antes de fingir conocimiento.",
+        "settings_server_security_title": "🌐 Servidor API y Configuración de seguridad",
+        "settings_api_base_label": "URL de base de API (Dejar vacío para el mismo dominio)",
+        "settings_access_password_label": "API Contraseña (Dejar vacío para sin verificación)",
+        "settings_fetch_polling_title": "📡 Configuración de captura y sondeo",
+        "settings_fetch_interval_label": "Intervalo de captura (minutos)",
+        "settings_min_text_chars_label": "Umbral de longitud de texto completo",
+        "settings_ai_endpoint_title": "🤖 Configuración del endpoint de IA predeterminado (Opcional)",
+        "settings_ai_url_label": "API Base URL",
+        "settings_ai_key_label": "Clave API",
+        "settings_ai_model_label": "Nombre del modelo de IA",
+        "settings_btn_test_llm": "Comprobar disponibilidad de API LLM",
+        "settings_token_consumption_label": "Consumo de tokens de IA hoy (Tokens):",
+        "settings_token_prompt": "Prompt: ",
+        "settings_token_completion": "Completado: ",
+        "settings_token_total": "Total: ",
+        "settings_ai_tasks_title": "🧠 Tareas de IA y Autoevolución",
+        "settings_auto_summary_label": "Generar automáticamente resumen de IA al hacer clic en un artículo",
+        "settings_auto_summary_desc": "Si está desactivado, el resumen solo se genera al hacer clic en chat",
+        "settings_pregenerate_label": "Generar previamente resúmenes de artículos de alta atención en segundo plano",
+        "settings_pregenerate_desc": "Si está habilitado, los resúmenes se generarán automáticamente en segundo plano para artículos prioritarios",
+        "settings_stream_label": "Salida en streaming para resúmenes y chats",
+        "settings_stream_desc": "Si está habilitado, la IA escribirá en efecto máquina de escribir",
+        "settings_interest_profile_label": "Perfil de lectura y categorización inteligente",
+        "settings_interest_profile_desc": "Si está habilitado, la categorización de atención se optimizará. Consumo diario de ~2-3k tokens.",
+        "settings_promote_threshold_label": "Umbral de promoción automática de categorías",
+        "settings_btn_manual_maintenance": "⚙️ Ejecutar tarea de mantenimiento diario ahora",
+        "settings_notifications_title": "📢 Notificaciones push y badge de aplicación (PWA)",
+        "settings_badge_push_label": "Push de badge del icono de aplicación",
+        "settings_badge_push_desc": "Si está habilitado, el icono de aplicación en pantalla de inicio mostrará la cantidad de no leídos",
+        "settings_btn_badge_permission_enable": "🔔 Habilitar permisos push",
+        "settings_btn_badge_permission_enabled": "✅ Badge habilitado",
+        "settings_btn_badge_permission_denied": "❌ Permiso denegado",
+        "settings_btn_badge_permission_unsupported": "⚠️ Badge no soportado",
+        "settings_chat_config_title": "💬 Configuración independiente de API chat (Opcional)",
+        "settings_chat_url_label": "URL base de chat (Dejar vacío para heredar del global)",
+        "settings_chat_key_label": "Clave API chat (Opcional, dejar vacío para heredar del global)",
+        "settings_chat_model_label": "Nombre del modelo chat (Dejar vacío para predeterminado)",
+        "settings_chat_tokens_label": "Límite de tokens chat",
+        "settings_api_base_placeholder": "p. ej. http://localhost:8888",
+        "settings_access_password_placeholder": "Dejar vacío para desactivar la autenticación...",
+        "settings_ai_url_placeholder": "Dejar vacío para desactivar la IA...",
+        "settings_ai_key_placeholder": "Introducir clave API...",
+        "settings_chat_model_placeholder": "Predeterminado..."
     },
     de: {
         "unread_articles": "Ungelesene Artikel",
@@ -4216,9 +4983,109 @@ const TRANSLATIONS = {
         "translating": "Übersetzung...",
         "show_original": "Nur Original anzeigen",
         "target_lang_label": "Zielsprache (Zusammenfassung, Übersetzung, F&A)",
-        "ui_lang_label": "Systemsprache"
+        "ui_lang_label": "Systemsprache",
+        "my_notes": "Meine Notizen",
+        "select_all": "Alles auswählen",
+        "batch_export": "📥 Batch-Export",
+        "all_unread_header": "Alle ungelesenen",
+        "count_notes": "{count} Notizen",
+        "count_starred": "{count} Favoriten",
+        "count_search": "{count} Ergebnisse",
+        "count_unread": "{count} ungelesen",
+        "empty_state_title": "Neuer Lesehorizont",
+        "empty_state_desc": "Wählen Sie einen Artikel aus, um die KI-Zusammenfassung, Clickbait-Erkennung und den KI-Chat zu aktivieren.",
+        "no_feeds_title": "Keine Artikel",
+        "no_feeds_desc": "Wählen Sie links eine Kategorie aus oder importieren Sie neue Feeds, um mit dem Lesen zu beginnen.",
+        "no_articles_title": "Keine Artikel gefunden",
+        "no_articles_desc": "In dieser Kategorie befinden sich derzeit keine Artikel, die den Filtern entsprechen.",
+        "all_read_title": "Alle Artikel gelesen",
+        "all_read_desc": "Großartig! Sie haben alle ungelesenen Artikel aus diesem Feed gelöscht.",
+        "add_feed_title": "Feed hinzufügen",
+        "add_feed_desc": "Geben Sie eine RSS/Atom-Feed-URL ein. Die KI analysiert und kategorisiert sie automatisch.",
+        "feed_url_placeholder": "Feed-URL eingeben...",
+        "add_button_submit": "Hinzufügen",
+        "cancel": "Abbrechen",
+        "import_opml_title": "OPML importieren",
+        "import_opml_desc": "Wählen Sie eine .opml-Datei aus, die aus anderen Readern (z. B. Feedly, NetNewsWire) exportiert wurde, um sie zu importieren.",
+        "drop_zone_label": "OPML-Datei hierher klicken oder ziehen",
+        "import_button_submit": "Import starten",
+        "feed_management_tab": "Feed-Verwaltung",
+        "system_settings_tab": "Einstellungen",
+        "manage_feeds_desc": "Verwalten Sie Ihre Feeds (Umbenennen, Aktivieren/Deaktivieren, Löschen oder Backup-Export).",
+        "import_opml_btn": "OPML importieren",
+        "export_opml_btn": "OPML exportieren",
+        "article_text_and_ai_summary": "Artikeltext & KI-Zusammenfassung",
+        "profile_title": "Mein Leseprofil",
+        "profile_tab_token": "📅 Token-Statistiken",
+        "profile_tab_interest": "📊 Interessen",
+        "profile_habit_title": "🪙 Wöchentlicher Token-Verbrauch",
+        "profile_habit_insight": "Lesegewohnheiten werden analysiert...",
+        "profile_label_category_distribution": "📊 Leseverteilung nach Kategorie",
+        "profile_label_stat_total": "Gesamt gelesen (30 Tage)",
+        "profile_label_stat_high": "Tiefes Lesen",
+        "profile_label_stat_low": "Schnelles Überfliegen",
+        "profile_label_tag_cloud": "🎯 Interessen-Tag-Cloud (Klicken für Details)",
+        "profile_detail_title": "Themendetails",
+        "profile_detail_label_count": "Tiefes Lesen: {count} Artikel",
+        "profile_detail_label_starred": "Favorisiert: {count} Artikel",
+        "profile_detail_label_original": "Originalbesuche: {count} Mal",
+        "profile_detail_label_trend": "Aktivitätstrend (letzte 4 Wochen)",
+        "profile_detail_label_articles": "Repräsentative Artikel",
+        "profile_label_heatmap": "📅 Aufmerksamkeits-Trend (letzte 4 Wochen)",
+        "profile_less": "Weniger",
+        "profile_more": "Mehr",
+        "profile_calculating": "Lesepräferenzen werden berechnet und Profildaten extrahiert...",
+        "profile_disabled_title": "Leseprofil-Funktion deaktiviert",
+        "profile_disabled_desc": "Bitte aktivieren Sie 'Leseprofil & Intelligente Kategorisierung' in den Einstellungen, um diese Funktion zu nutzen.",
+        "profile_cold_start_title": "Daten werden gesammelt",
+        "profile_cold_start_desc": "Sammeln von Lesedaten. Mindestens 15 gelesene Artikel erforderlich.",
+        "profile_load_failed_desc": "Leseprofil konnte nicht geladen werden, bitte versuchen Sie es später noch einmal.",
+        "profile_default_insight": "Dies ist der Beweis dafür, dass die KI Sie 30 Tage lang beobachtet hat. Kleinere Tags zeigen Themen, die Sie angeblich interessieren, die Sie aber nie anklicken. Schauen Sie hier vorbei, bevor Sie vorgeben, sich auszukennen.",
+        "settings_server_security_title": "🌐 API-Server und Sicherheitseinstellungen",
+        "settings_api_base_label": "Backend-API-Adresse (Leer lassen für gleiche Domain)",
+        "settings_access_password_label": "API-Zugriffspasswort (Leer lassen für keine Überprüfung)",
+        "settings_fetch_polling_title": "📡 Einstellungen für Abruf und Polling",
+        "settings_fetch_interval_label": "Abrufintervall (Minuten)",
+        "settings_min_text_chars_label": "Mindestlänge für Volltext-Erkennung",
+        "settings_ai_endpoint_title": "🤖 Standard-KI-Endpoint-Konfiguration (Optional)",
+        "settings_ai_url_label": "API Base URL",
+        "settings_ai_key_label": "API Key",
+        "settings_ai_model_label": "KI-Modellname",
+        "settings_btn_test_llm": "LLM-API-Verfügbarkeit prüfen",
+        "settings_token_consumption_label": "Heutiger AI Token-Verbrauch (Tokens):",
+        "settings_token_prompt": "Prompt: ",
+        "settings_token_completion": "Antwort: ",
+        "settings_token_total": "Gesamt: ",
+        "settings_ai_tasks_title": "🧠 KI-Aufgaben & Selbstentwicklung",
+        "settings_auto_summary_label": "KI-Zusammenfassung bei Klick auf Artikel automatisch generieren",
+        "settings_auto_summary_desc": "Wenn deaktiviert, wird die Zusammenfassung nur generiert, wenn das Chat-Panel geöffnet wird",
+        "settings_pregenerate_label": "KI-Zusammenfassung für wichtige Artikel im Hintergrund vorab generieren",
+        "settings_pregenerate_desc": "Wenn aktiviert, wird die Zusammenfassung für wichtige Artikel automatisch im Hintergrund generiert",
+        "settings_stream_label": "Streaming-Ausgabe für Zusammenfassung und Chat",
+        "settings_stream_desc": "Wenn aktiviert, wird die KI den Text wie eine Schreibmaschine ausgeben",
+        "settings_interest_profile_label": "Leseprofil & Intelligente Kategorisierung",
+        "settings_interest_profile_desc": "Wenn aktiviert, wird die Aufmerksamkeitskategorisierung automatisch optimiert. Täglicher Verbrauch von ~2-3k Token um Mitternacht.",
+        "settings_promote_threshold_label": "Schwellenwert für automatische Kategoriebeförderung",
+        "settings_btn_manual_maintenance": "⚙️ Tägliche Wartung jetzt ausführen",
+        "settings_notifications_title": "📢 Push-Benachrichtigungen & App-Badge (PWA)",
+        "settings_badge_push_label": "Ungelesene Anzahl per App-Badge",
+        "settings_badge_push_desc": "Wenn aktiviert, zeigt das Symbol auf dem Startbildschirm die Anzahl der ungelesenen Artikel an",
+        "settings_btn_badge_permission_enable": "🔔 Push-Berechtigungen aktivieren",
+        "settings_btn_badge_permission_enabled": "✅ Badge aktiviert",
+        "settings_btn_badge_permission_denied": "❌ Berechtigung verweigert",
+        "settings_btn_badge_permission_unsupported": "⚠️ Badge nicht unterstützt",
+        "settings_chat_config_title": "💬 Unabhängige Chat-API-Konfiguration (Optional)",
+        "settings_chat_url_label": "Chat Base URL (Leer lassen, um globale Einstellung zu übernehmen)",
+        "settings_chat_key_label": "Chat-API Key (Optional, leer lassen, um globale Einstellung zu übernehmen)",
+        "settings_chat_model_label": "Chat-Modellname (Leer lassen für Standard)",
+        "settings_chat_tokens_label": "Chat Token-Limit",
+        "settings_api_base_placeholder": "z. B. http://localhost:8888",
+        "settings_access_password_placeholder": "Leer lassen, um die Passwortprüfung zu deaktivieren...",
+        "settings_ai_url_placeholder": "Leer lassen, um KI-Funktionen zu deaktivieren...",
+        "settings_ai_key_placeholder": "API-Schlüssel eingeben...",
+        "settings_chat_model_placeholder": "Standard..."
     }
-};
+}
 
 function updateUILanguage(lang) {
     if (!TRANSLATIONS[lang]) lang = 'zh';
@@ -4229,6 +5096,9 @@ function updateUILanguage(lang) {
     
     const starredText = elements.btnStarred.querySelector('.item-text');
     if (starredText) starredText.textContent = TRANSLATIONS[lang]["my_starred"];
+    
+    const notesText = elements.btnNotes.querySelector('.item-text');
+    if (notesText) notesText.textContent = TRANSLATIONS[lang]["my_notes"];
     
     const feedsTitle = document.querySelector('.section-title');
     if (feedsTitle) feedsTitle.textContent = TRANSLATIONS[lang]["feeds_title"];
@@ -4243,9 +5113,15 @@ function updateUILanguage(lang) {
         elements.refreshAllBtn.appendChild(document.createTextNode(' ' + TRANSLATIONS[lang]["refresh_all"]));
     }
     
-    // 3. Middle Column Filters
+    // 3. Middle Column Filters & Buttons
     if (elements.markAllReadBtn) {
         elements.markAllReadBtn.textContent = TRANSLATIONS[lang]["mark_all_read"];
+    }
+    if (elements.btnSelectAllNotes) {
+        elements.btnSelectAllNotes.textContent = TRANSLATIONS[lang]["select_all"];
+    }
+    if (elements.btnBatchExportNotes) {
+        elements.btnBatchExportNotes.textContent = TRANSLATIONS[lang]["batch_export"];
     }
     
     const toggleLabel = document.querySelector('.toggle-label');
@@ -4253,6 +5129,25 @@ function updateUILanguage(lang) {
     
     if (state.activeView === 'unread') {
         elements.currentCategoryName.textContent = TRANSLATIONS[lang]["current_category_unread"];
+    }
+    
+    // Update empty states text if shown in entries-list
+    const mainEmptyTitle = document.querySelector('#entries-list .empty-state h3');
+    if (mainEmptyTitle) {
+        const text = mainEmptyTitle.textContent;
+        if (text === '暂无文章' || text === 'No Articles' || text === '記事がありません' || text === '글이 없습니다' || text === 'Aucun article' || text === 'No hay artículos' || text === 'Keine Artikel' || text === TRANSLATIONS[lang]["no_feeds_title"]) {
+            mainEmptyTitle.textContent = TRANSLATIONS[lang]["no_feeds_title"];
+            const mainEmptyDesc = document.querySelector('#entries-list .empty-state p');
+            if (mainEmptyDesc) mainEmptyDesc.textContent = TRANSLATIONS[lang]["no_feeds_desc"];
+        } else if (text === '没有找到文章' || text === 'No Articles Found' || text === '記事が見つかりません' || text === '글을 찾을 수 없습니다' || text === 'Aucun article trouvé' || text === 'No se encontraron artículos' || text === 'Keine Artikel gefunden' || text === TRANSLATIONS[lang]["no_articles_title"]) {
+            mainEmptyTitle.textContent = TRANSLATIONS[lang]["no_articles_title"];
+            const mainEmptyDesc = document.querySelector('#entries-list .empty-state p');
+            if (mainEmptyDesc) mainEmptyDesc.textContent = TRANSLATIONS[lang]["no_articles_desc"];
+        } else if (text === '所有文章已读完' || text === 'All Articles Read' || text === 'すべての記事が既読です' || text === '모든 글을 읽었습니다' || text === 'Tous les articles sont lus' || text === 'Todos los artículos leídos' || text === 'Alle Artikel gelesen' || text === TRANSLATIONS[lang]["all_read_title"]) {
+            mainEmptyTitle.textContent = TRANSLATIONS[lang]["all_read_title"];
+            const mainEmptyDesc = document.querySelector('#entries-list .empty-state p');
+            if (mainEmptyDesc) mainEmptyDesc.textContent = TRANSLATIONS[lang]["all_read_desc"];
+        }
     }
     
     // 4. Search Bar
@@ -4290,7 +5185,7 @@ function updateUILanguage(lang) {
             if (btnText) btnText.textContent = textVal;
             else elements.artToggleStarBtn.textContent = textVal;
         }
-
+ 
         // Bilingual Translation Button
         const transBtn = elements.artTranslateBtn;
         if (transBtn) {
@@ -4306,6 +5201,12 @@ function updateUILanguage(lang) {
             }
         }
     }
+    
+    // Detail View Empty State
+    const detailEmptyTitle = document.querySelector('#detail-empty-state h3');
+    if (detailEmptyTitle) detailEmptyTitle.textContent = TRANSLATIONS[lang]["empty_state_title"];
+    const detailEmptyDesc = document.querySelector('#detail-empty-state p');
+    if (detailEmptyDesc) detailEmptyDesc.textContent = TRANSLATIONS[lang]["empty_state_desc"];
     
     // 6. Attention levels
     const attentionLabel = document.querySelector('.attention-selector-wrapper .actions-label');
@@ -4357,38 +5258,308 @@ function updateUILanguage(lang) {
     }
     
     // 9. Modal UI Labels
-    const addFeedTitle = document.querySelector('#add-feed-modal h2');
-    if (addFeedTitle) addFeedTitle.textContent = TRANSLATIONS[lang]["add_feed"];
+    const addFeedTitle = document.querySelector('#add-feed-modal h3');
+    if (addFeedTitle) addFeedTitle.textContent = TRANSLATIONS[lang]["add_feed_title"];
     
-    const inputFeedLabel = document.querySelector('#add-feed-modal label');
-    if (inputFeedLabel) inputFeedLabel.textContent = TRANSLATIONS[lang]["feed_url_label"];
+    const addFeedDesc = document.querySelector('#add-feed-modal .modal-desc');
+    if (addFeedDesc) addFeedDesc.textContent = TRANSLATIONS[lang]["add_feed_desc"];
     
-    const addBtn = document.getElementById('feed-add-submit-btn');
-    if (addBtn) addBtn.textContent = TRANSLATIONS[lang]["add_button"];
+    const feedUrlInput = document.getElementById('feed-url-input');
+    if (feedUrlInput) feedUrlInput.placeholder = TRANSLATIONS[lang]["feed_url_placeholder"];
     
-    const opmlTitle = document.querySelector('#opml-modal h2');
-    if (opmlTitle) opmlTitle.textContent = TRANSLATIONS[lang]["import_opml"];
+    const addFeedCancel = document.querySelector('#add-feed-modal .modal-btn.secondary');
+    if (addFeedCancel) addFeedCancel.textContent = TRANSLATIONS[lang]["cancel"];
     
-    const opmlLabel = document.querySelector('#opml-modal label');
-    if (opmlLabel) opmlLabel.textContent = TRANSLATIONS[lang]["select_opml_file"];
+    const addBtn = document.getElementById('submit-feed-btn');
+    if (addBtn) addBtn.textContent = TRANSLATIONS[lang]["add_button_submit"];
     
-    const importSubmitBtn = document.getElementById('opml-import-submit-btn');
-    if (importSubmitBtn) importSubmitBtn.textContent = TRANSLATIONS[lang]["import_button"];
+    const opmlTitle = document.querySelector('#opml-modal h3');
+    if (opmlTitle) opmlTitle.textContent = TRANSLATIONS[lang]["import_opml_title"];
     
-    const manageTitle = document.querySelector('#manage-feeds-modal h2');
-    if (manageTitle) manageTitle.textContent = TRANSLATIONS[lang]["manage_feeds"];
+    const opmlDesc = document.querySelector('#opml-modal .modal-desc');
+    if (opmlDesc) opmlDesc.textContent = TRANSLATIONS[lang]["import_opml_desc"];
+    
+    const dropZoneTextSpan = document.getElementById('file-upload-label');
+    if (dropZoneTextSpan) {
+        dropZoneTextSpan.textContent = TRANSLATIONS[lang]["drop_zone_label"];
+    }
+    
+    const opmlCancel = document.querySelector('#opml-modal .modal-btn.secondary');
+    if (opmlCancel) opmlCancel.textContent = TRANSLATIONS[lang]["cancel"];
+    
+    const importSubmitBtn = document.getElementById('submit-opml-btn');
+    if (importSubmitBtn) importSubmitBtn.textContent = TRANSLATIONS[lang]["import_button_submit"];
+    
+    const manageTitle = document.querySelector('#manage-feeds-modal h3');
+    if (manageTitle) manageTitle.textContent = TRANSLATIONS[lang]["system_management_center"];
+    
+    const tabFeedsBtn = document.getElementById('tab-btn-feeds');
+    if (tabFeedsBtn) tabFeedsBtn.textContent = TRANSLATIONS[lang]["feed_management_tab"];
+    
+    const tabSettingsBtn = document.getElementById('tab-btn-settings');
+    if (tabSettingsBtn) tabSettingsBtn.textContent = TRANSLATIONS[lang]["system_settings_tab"];
+    
+    const manageFeedsDesc = document.querySelector('#manage-feeds-modal .modal-desc');
+    if (manageFeedsDesc) manageFeedsDesc.textContent = TRANSLATIONS[lang]["manage_feeds_desc"];
+    
+    const opmlImportBtn = document.getElementById('opml-import-btn');
+    if (opmlImportBtn) {
+        const svg = opmlImportBtn.querySelector('svg');
+        opmlImportBtn.innerHTML = '';
+        if (svg) opmlImportBtn.appendChild(svg);
+        opmlImportBtn.appendChild(document.createTextNode(' ' + TRANSLATIONS[lang]["import_opml_btn"]));
+    }
+    
+    const opmlExportBtn = document.getElementById('opml-export-btn');
+    if (opmlExportBtn) {
+        const svg = opmlExportBtn.querySelector('svg');
+        opmlExportBtn.innerHTML = '';
+        if (svg) opmlExportBtn.appendChild(svg);
+        opmlExportBtn.appendChild(document.createTextNode(' ' + TRANSLATIONS[lang]["export_opml_btn"]));
+    }
     
     if (elements.settingsSaveBtn) elements.settingsSaveBtn.textContent = TRANSLATIONS[lang]["save_settings"];
     
-    const closeBtn = document.getElementById('modal-cancel-btn');
+    const closeBtn = document.querySelector('#manage-feeds-modal .modal-footer .close-modal-btn');
     if (closeBtn) closeBtn.textContent = TRANSLATIONS[lang]["close"];
-
+ 
     // 10. Settings labels
     const targetLangLabel = document.getElementById('label-target-lang');
     if (targetLangLabel) targetLangLabel.textContent = TRANSLATIONS[lang]["target_lang_label"];
     
     const uiLangLabel = document.getElementById('label-ui-lang');
     if (uiLangLabel) uiLangLabel.textContent = TRANSLATIONS[lang]["ui_lang_label"];
+    
+    // Settings Group Titles
+    const sgApi = document.getElementById('setting-group-title-api');
+    if (sgApi) sgApi.textContent = TRANSLATIONS[lang]["settings_server_security_title"];
+    const sgFetch = document.getElementById('setting-group-title-fetch');
+    if (sgFetch) sgFetch.textContent = TRANSLATIONS[lang]["settings_fetch_polling_title"];
+    const sgAi = document.getElementById('setting-group-title-ai');
+    if (sgAi) sgAi.textContent = TRANSLATIONS[lang]["settings_ai_endpoint_title"];
+    const sgTasks = document.getElementById('setting-group-title-tasks');
+    if (sgTasks) sgTasks.textContent = TRANSLATIONS[lang]["settings_ai_tasks_title"];
+    const sgNotif = document.getElementById('setting-group-title-notifications');
+    if (sgNotif) sgNotif.textContent = TRANSLATIONS[lang]["settings_notifications_title"];
+    const sgChat = document.getElementById('setting-group-title-chat');
+    if (sgChat) sgChat.textContent = TRANSLATIONS[lang]["settings_chat_config_title"];
+
+    // Settings Field Labels
+    const slApiBase = document.getElementById('setting-label-api-base');
+    if (slApiBase) slApiBase.textContent = TRANSLATIONS[lang]["settings_api_base_label"];
+    const slAccessPw = document.getElementById('setting-label-access-password');
+    if (slAccessPw) slAccessPw.textContent = TRANSLATIONS[lang]["settings_access_password_label"];
+    const slFetchInt = document.getElementById('setting-label-fetch-interval');
+    if (slFetchInt) slFetchInt.textContent = TRANSLATIONS[lang]["settings_fetch_interval_label"];
+    const slMinChars = document.getElementById('setting-label-min-text-chars');
+    if (slMinChars) slMinChars.textContent = TRANSLATIONS[lang]["settings_min_text_chars_label"];
+    
+    const slAiUrl = document.getElementById('setting-label-ai-url');
+    if (slAiUrl) slAiUrl.textContent = TRANSLATIONS[lang]["settings_ai_url_label"];
+    const slAiKey = document.getElementById('setting-label-ai-key');
+    if (slAiKey) slAiKey.textContent = TRANSLATIONS[lang]["settings_ai_key_label"];
+    const slAiModel = document.getElementById('setting-label-ai-model');
+    if (slAiModel) slAiModel.textContent = TRANSLATIONS[lang]["settings_ai_model_label"];
+    
+    const btnTestLlm = document.getElementById('btn-test-llm');
+    if (btnTestLlm) btnTestLlm.textContent = TRANSLATIONS[lang]["settings_btn_test_llm"];
+    
+    const slTokenCons = document.getElementById('setting-label-token-consumption');
+    if (slTokenCons) slTokenCons.textContent = TRANSLATIONS[lang]["settings_token_consumption_label"];
+    const slTokenPrompt = document.getElementById('setting-label-token-prompt');
+    if (slTokenPrompt) slTokenPrompt.textContent = TRANSLATIONS[lang]["settings_token_prompt"];
+    const slTokenComp = document.getElementById('setting-label-token-completion');
+    if (slTokenComp) slTokenComp.textContent = TRANSLATIONS[lang]["settings_token_completion"];
+    const slTokenTotal = document.getElementById('setting-label-token-total');
+    if (slTokenTotal) slTokenTotal.textContent = TRANSLATIONS[lang]["settings_token_total"];
+    
+    const slAutoSum = document.getElementById('setting-label-auto-summary');
+    if (slAutoSum) slAutoSum.textContent = TRANSLATIONS[lang]["settings_auto_summary_label"];
+    const sdAutoSum = document.getElementById('setting-desc-auto-summary');
+    if (sdAutoSum) sdAutoSum.textContent = TRANSLATIONS[lang]["settings_auto_summary_desc"];
+    
+    const slPregen = document.getElementById('setting-label-pregenerate');
+    if (slPregen) slPregen.textContent = TRANSLATIONS[lang]["settings_pregenerate_label"];
+    const sdPregen = document.getElementById('setting-desc-pregenerate');
+    if (sdPregen) sdPregen.textContent = TRANSLATIONS[lang]["settings_pregenerate_desc"];
+    
+    const slStream = document.getElementById('setting-label-stream');
+    if (slStream) slStream.textContent = TRANSLATIONS[lang]["settings_stream_label"];
+    const sdStream = document.getElementById('setting-desc-stream');
+    if (sdStream) sdStream.textContent = TRANSLATIONS[lang]["settings_stream_desc"];
+    
+    const slIntProf = document.getElementById('setting-label-interest-profile');
+    if (slIntProf) slIntProf.textContent = TRANSLATIONS[lang]["settings_interest_profile_label"];
+    const sdIntProf = document.getElementById('setting-desc-interest-profile');
+    if (sdIntProf) sdIntProf.textContent = TRANSLATIONS[lang]["settings_interest_profile_desc"];
+    
+    const slPromote = document.getElementById('setting-label-promote-threshold');
+    if (slPromote) slPromote.textContent = TRANSLATIONS[lang]["settings_promote_threshold_label"];
+    
+    const btnMaint = document.getElementById('btn-manual-maintenance');
+    if (btnMaint) btnMaint.textContent = TRANSLATIONS[lang]["settings_btn_manual_maintenance"];
+    
+    const slBadgePush = document.getElementById('setting-label-badge-push');
+    if (slBadgePush) slBadgePush.textContent = TRANSLATIONS[lang]["settings_badge_push_label"];
+    const sdBadgePush = document.getElementById('setting-desc-badge-push');
+    if (sdBadgePush) sdBadgePush.textContent = TRANSLATIONS[lang]["settings_badge_push_desc"];
+    
+    const btnBadgePerm = document.getElementById('btn-request-badge-permission');
+    if (btnBadgePerm) {
+        if (!btnBadgePerm.disabled) {
+            btnBadgePerm.textContent = TRANSLATIONS[lang]["settings_btn_badge_permission_enable"];
+        } else {
+            const text = btnBadgePerm.textContent;
+            if (text.includes('已开启') || text.includes('Enabled') || text.includes('有効') || text.includes('활성화') || text.includes('activé') || text.includes('habilitado') || text.includes('aktiviert')) {
+                btnBadgePerm.textContent = TRANSLATIONS[lang]["settings_btn_badge_permission_enabled"];
+            } else if (text.includes('已拒绝') || text.includes('Denied') || text.includes('拒') || text.includes('거부') || text.includes('refusé') || text.includes('denegado') || text.includes('verweigert')) {
+                btnBadgePerm.textContent = TRANSLATIONS[lang]["settings_btn_badge_permission_denied"];
+            } else if (text.includes('不支持') || text.includes('Unsupported') || text.includes('サポート') || text.includes('지원') || text.includes('supporté') || text.includes('soportado') || text.includes('nicht unterstützt')) {
+                btnBadgePerm.textContent = TRANSLATIONS[lang]["settings_btn_badge_permission_unsupported"];
+            }
+        }
+    }
+    
+    const slChatUrl = document.getElementById('setting-label-chat-url');
+    if (slChatUrl) slChatUrl.textContent = TRANSLATIONS[lang]["settings_chat_url_label"];
+    const slChatKey = document.getElementById('setting-label-chat-key');
+    if (slChatKey) slChatKey.textContent = TRANSLATIONS[lang]["settings_chat_key_label"];
+    const slChatModel = document.getElementById('setting-label-chat-model');
+    if (slChatModel) slChatModel.textContent = TRANSLATIONS[lang]["settings_chat_model_label"];
+    const slChatTok = document.getElementById('setting-label-chat-tokens');
+    if (slChatTok) slChatTok.textContent = TRANSLATIONS[lang]["settings_chat_tokens_label"];
+
+    // 11. Profile Modal
+    const profileTitle = document.getElementById('label-profile-title');
+    if (profileTitle) profileTitle.textContent = TRANSLATIONS[lang]["profile_title"];
+    
+    const profileToggleWeek = document.getElementById('profile-toggle-week');
+    if (profileToggleWeek) profileToggleWeek.textContent = TRANSLATIONS[lang]["profile_tab_token"];
+    
+    const profileToggleMonth = document.getElementById('profile-toggle-month');
+    if (profileToggleMonth) profileToggleMonth.textContent = TRANSLATIONS[lang]["profile_tab_interest"];
+    
+    const profileHabitTitle = document.getElementById('profile-habit-title');
+    if (profileHabitTitle) profileHabitTitle.textContent = TRANSLATIONS[lang]["profile_habit_title"];
+    
+    const profileHeatmapLegendLess = document.getElementById('profile-heatmap-legend-less');
+    if (profileHeatmapLegendLess) profileHeatmapLegendLess.textContent = TRANSLATIONS[lang]["profile_less"];
+    const profileHeatmapLegendMore = document.getElementById('profile-heatmap-legend-more');
+    if (profileHeatmapLegendMore) profileHeatmapLegendMore.textContent = TRANSLATIONS[lang]["profile_more"];
+    
+    const profileHeatmapLegendLess2 = document.getElementById('profile-heatmap-legend-less2');
+    if (profileHeatmapLegendLess2) profileHeatmapLegendLess2.textContent = TRANSLATIONS[lang]["profile_less"];
+    const profileHeatmapLegendMore2 = document.getElementById('profile-heatmap-legend-more2');
+    if (profileHeatmapLegendMore2) profileHeatmapLegendMore2.textContent = TRANSLATIONS[lang]["profile_more"];
+    
+    const profileHabitInsight = document.getElementById('profile-habit-insight-text');
+    if (profileHabitInsight && (profileHabitInsight.textContent === '阅读习惯分析中...' || profileHabitInsight.textContent === 'Analyzing reading habits...' || profileHabitInsight.textContent === TRANSLATIONS[lang]["profile_habit_insight"])) {
+        profileHabitInsight.textContent = TRANSLATIONS[lang]["profile_habit_insight"];
+    }
+    
+    const profileLabelCategory = document.getElementById('profile-label-category-distribution');
+    if (profileLabelCategory) profileLabelCategory.textContent = TRANSLATIONS[lang]["profile_label_category_distribution"];
+    
+    const profileLabelTotal = document.getElementById('profile-label-stat-total');
+    if (profileLabelTotal) profileLabelTotal.textContent = TRANSLATIONS[lang]["profile_label_stat_total"];
+    const profileLabelHigh = document.getElementById('profile-label-stat-high');
+    if (profileLabelHigh) profileLabelHigh.textContent = TRANSLATIONS[lang]["profile_label_stat_high"];
+    const profileLabelLow = document.getElementById('profile-label-stat-low');
+    if (profileLabelLow) profileLabelLow.textContent = TRANSLATIONS[lang]["profile_label_stat_low"];
+    
+    const profileLabelTagCloud = document.getElementById('profile-label-tag-cloud');
+    if (profileLabelTagCloud) profileLabelTagCloud.textContent = TRANSLATIONS[lang]["profile_label_tag_cloud"];
+    
+    const profileDetailTitle = document.getElementById('profile-detail-title');
+    if (profileDetailTitle) profileDetailTitle.textContent = TRANSLATIONS[lang]["profile_detail_title"];
+    
+    const profileDetailLabelCount = document.getElementById('profile-detail-label-count');
+    if (profileDetailLabelCount) {
+        const curCount = document.getElementById('profile-detail-count') ? document.getElementById('profile-detail-count').textContent : '0';
+        profileDetailLabelCount.innerHTML = TRANSLATIONS[lang]["profile_detail_label_count"].replace('{count}', `<span id="profile-detail-count" style="font-weight: 600; color: var(--text-primary);">${curCount}</span>`);
+    }
+    const profileDetailLabelStarred = document.getElementById('profile-detail-label-starred');
+    if (profileDetailLabelStarred) {
+        const curStarred = document.getElementById('profile-detail-starred') ? document.getElementById('profile-detail-starred').textContent : '0';
+        profileDetailLabelStarred.innerHTML = TRANSLATIONS[lang]["profile_detail_label_starred"].replace('{count}', `<span id="profile-detail-starred" style="font-weight: 600; color: var(--text-primary);">${curStarred}</span>`);
+    }
+    const profileDetailLabelOriginal = document.getElementById('profile-detail-label-original');
+    if (profileDetailLabelOriginal) {
+        const curOriginal = document.getElementById('profile-detail-original') ? document.getElementById('profile-detail-original').textContent : '0';
+        profileDetailLabelOriginal.innerHTML = TRANSLATIONS[lang]["profile_detail_label_original"].replace('{count}', `<span id="profile-detail-original" style="font-weight: 600; color: var(--text-primary);">${curOriginal}</span>`);
+    }
+    
+    const profileDetailTrendTitle = document.getElementById('profile-detail-trend-title');
+    if (profileDetailTrendTitle) profileDetailTrendTitle.textContent = TRANSLATIONS[lang]["profile_detail_label_trend"];
+    
+    const profileDetailLabelArticles = document.getElementById('profile-detail-label-articles');
+    if (profileDetailLabelArticles) profileDetailLabelArticles.textContent = TRANSLATIONS[lang]["profile_detail_label_articles"];
+    
+    const profileLabelHeatmap = document.getElementById('profile-label-heatmap');
+    if (profileLabelHeatmap) profileLabelHeatmap.textContent = TRANSLATIONS[lang]["profile_label_heatmap"];
+    
+    const profileInsightText = document.getElementById('profile-insight-text');
+    if (profileInsightText && (profileInsightText.textContent.startsWith('这是 AI 默默窥探') || profileInsightText.textContent.startsWith('This is proof') || profileInsightText.textContent.startsWith('これはAIが') || profileInsightText.textContent.startsWith('이것은 AI가') || profileInsightText.textContent.startsWith('C\'est la preuve') || profileInsightText.textContent.startsWith('Esta es la prueba') || profileInsightText.textContent.startsWith('Dies ist der Beweis'))) {
+        profileInsightText.textContent = TRANSLATIONS[lang]["profile_default_insight"];
+    }
+    
+    const profileCloseBtn = document.getElementById('close-profile-modal-btn-footer');
+    if (profileCloseBtn) profileCloseBtn.textContent = TRANSLATIONS[lang]["close"];
+    
+    if (elements.profileStatusView && !elements.profileStatusView.classList.contains('hidden')) {
+        const titleText = elements.profileStatusTitle.textContent;
+        if (titleText === '正在加载...' || titleText === 'Loading...' || titleText === '読み込み中...' || titleText === '불러오는 중...' || titleText === 'Chargement...' || titleText === 'Cargando...' || titleText === 'Laden...') {
+            elements.profileStatusTitle.textContent = TRANSLATIONS[lang]["loading_generic"];
+            elements.profileStatusDesc.textContent = TRANSLATIONS[lang]["profile_calculating"];
+        } else if (titleText === '智能画像功能已关闭' || titleText === 'Reading Profile is Disabled' || titleText === '読書プロファイル機能は無効です' || titleText === '독서 프로필 기능이 비활성화되었습니다' || titleText === 'Profil de lecture désactivé' || titleText === 'Perfil de lectura desactivado' || titleText === 'Leseprofil-Funktion deaktiviert') {
+            elements.profileStatusTitle.textContent = TRANSLATIONS[lang]["profile_disabled_title"];
+            elements.profileStatusDesc.textContent = TRANSLATIONS[lang]["profile_disabled_desc"];
+        } else if (titleText === '智能画像积累中' || titleText === 'Accumulating Data' || titleText === 'データを蓄積中' || titleText === '데이터 분석 중' || titleText === 'Accumulation de données' || titleText === 'Acumulando datos' || titleText === 'Daten werden gesammelt') {
+            elements.profileStatusTitle.textContent = TRANSLATIONS[lang]["profile_cold_start_title"];
+            elements.profileStatusDesc.textContent = TRANSLATIONS[lang]["profile_cold_start_desc"];
+        } else if (titleText === '加载失败' || titleText === 'Failed to load' || titleText === '読み込み失敗' || titleText === '로드 실패' || titleText === 'Échec du chargement' || titleText === 'Error al cargar' || titleText === 'Laden fehlgeschlagen') {
+            elements.profileStatusTitle.textContent = TRANSLATIONS[lang]["load_failed"];
+            elements.profileStatusDesc.textContent = TRANSLATIONS[lang]["profile_load_failed_desc"];
+        }
+    }
+    
+    const mobileDetailTitle = document.getElementById('mobile-detail-header-title');
+    if (mobileDetailTitle) mobileDetailTitle.textContent = TRANSLATIONS[lang]["article_text_and_ai_summary"];
+
+    // 12. Settings Placeholders
+    const inputApiBase = document.getElementById('setting-api-base');
+    if (inputApiBase) inputApiBase.placeholder = TRANSLATIONS[lang]["settings_api_base_placeholder"] || '';
+    
+    const inputAccessPw = document.getElementById('setting-access-password');
+    if (inputAccessPw) inputAccessPw.placeholder = TRANSLATIONS[lang]["settings_access_password_placeholder"] || '';
+    
+    const inputAiUrl = document.getElementById('setting-ai-url');
+    if (inputAiUrl) inputAiUrl.placeholder = TRANSLATIONS[lang]["settings_ai_url_placeholder"] || '';
+    
+    const inputAiKey = document.getElementById('setting-ai-key');
+    if (inputAiKey) inputAiKey.placeholder = TRANSLATIONS[lang]["settings_ai_key_placeholder"] || '';
+    
+    const inputAiModel = document.getElementById('setting-ai-model');
+    if (inputAiModel) inputAiModel.placeholder = TRANSLATIONS[lang]["settings_ai_url_placeholder"] || '';
+    
+    const inputChatModel = document.getElementById('setting-chat-model');
+    if (inputChatModel) inputChatModel.placeholder = TRANSLATIONS[lang]["settings_chat_model_placeholder"] || '';
+    
+    // 13. Target Language dropdown options
+    const optAuto = document.querySelector('#setting-ai-summary-lang option[value="auto"]');
+    if (optAuto) {
+        const autoText = {
+            'zh': '跟随原文 (Auto)',
+            'zh-hant': '跟隨原文 (Auto)',
+            'en': 'Follow Original (Auto)',
+            'ja': '原文に従う (Auto)',
+            'ko': '원본 문서 언어 (Auto)',
+            'fr': 'Suivre l\'original (Auto)',
+            'es': 'Seguir original (Auto)',
+            'de': 'Original folgen (Auto)'
+        };
+        optAuto.textContent = autoText[lang] || '跟随原文 (Auto)';
+    }
 }
 
 function renderBilingualContainer(content) {
@@ -4783,11 +5954,12 @@ function initPwaGestures() {
                             // Update count label
                             updateEntriesCountLabel();
                             if (elements.entriesList.querySelectorAll('.entry-card').length === 0) {
+                                const lang = state.systemLang || 'zh';
                                 elements.entriesList.innerHTML = `
                                     <div class="empty-state">
                                         <span class="empty-icon">☕</span>
-                                        <h3>所有文章已读完</h3>
-                                        <p>真棒！已清理完当前订阅源的全部未读。</p>
+                                        <h3>${TRANSLATIONS[lang]["all_read_title"]}</h3>
+                                        <p>${TRANSLATIONS[lang]["all_read_desc"]}</p>
                                     </div>`;
                              }
                         }, 300);
@@ -5033,8 +6205,10 @@ async function showProfileModal() {
     
     elements.profileStatusView.classList.remove('hidden');
     elements.profileMainContent.classList.add('hidden');
-    elements.profileStatusTitle.textContent = "正在加载...";
-    elements.profileStatusDesc.textContent = "正在计算阅读偏好，提炼画像数据...";
+    
+    const lang = state.systemLang || 'zh';
+    elements.profileStatusTitle.textContent = TRANSLATIONS[lang]["loading_generic"];
+    elements.profileStatusDesc.textContent = TRANSLATIONS[lang]["profile_calculating"];
     
     try {
         const response = await fetch('/profile/interests');
@@ -5047,16 +6221,16 @@ async function showProfileModal() {
         if (data.status === 'disabled') {
             elements.profileStatusView.classList.remove('hidden');
             elements.profileMainContent.classList.add('hidden');
-            elements.profileStatusTitle.textContent = "智能画像功能已关闭";
-            elements.profileStatusDesc.innerHTML = "请在设置中开启「阅读画像与智能分级」以启用本功能。行为数据仅在本地采集，开启偏好分析会每日自动执行一次AI归纳。";
+            elements.profileStatusTitle.textContent = TRANSLATIONS[lang]["profile_disabled_title"];
+            elements.profileStatusDesc.innerHTML = TRANSLATIONS[lang]["profile_disabled_desc"];
             return;
         }
         
         if (data.status === 'cold_start') {
             elements.profileStatusView.classList.remove('hidden');
             elements.profileMainContent.classList.add('hidden');
-            elements.profileStatusTitle.textContent = "智能画像积累中";
-            elements.profileStatusDesc.textContent = data.message || "阅读数据积累中，需至少15篇文章的阅读行为。";
+            elements.profileStatusTitle.textContent = TRANSLATIONS[lang]["profile_cold_start_title"];
+            elements.profileStatusDesc.textContent = data.message || TRANSLATIONS[lang]["profile_cold_start_desc"];
             return;
         }
         
@@ -5092,7 +6266,7 @@ async function showProfileModal() {
         if (data.topics && data.topics.concentration_note) {
             elements.profileInsightText.textContent = data.topics.concentration_note;
         } else {
-            elements.profileInsightText.textContent = "这是 AI 默默窥探你 30 天后的铁证。如果有些字小到要拿放大镜看，别怀疑，那就是你嘴上高喊‘热爱’却连点都没点过的叶公好龙型兴趣。下次跟人假装博学之前，建议先来这里‘雨露均沾’一下，免得你的信息茧房厚到能防弹。";
+            elements.profileInsightText.textContent = TRANSLATIONS[lang]["profile_default_insight"];
         }
         
         // Hide detail panel initially
@@ -5102,8 +6276,8 @@ async function showProfileModal() {
         console.error("Failed to load profile modal:", err);
         elements.profileStatusView.classList.remove('hidden');
         elements.profileMainContent.classList.add('hidden');
-        elements.profileStatusTitle.textContent = "加载失败";
-        elements.profileStatusDesc.textContent = "无法获取阅读画像数据，请稍后重试。";
+        elements.profileStatusTitle.textContent = TRANSLATIONS[lang]["load_failed"];
+        elements.profileStatusDesc.textContent = TRANSLATIONS[lang]["profile_load_failed_desc"];
     }
 }
 
@@ -5628,3 +6802,163 @@ async function renderProfileHeatmap(topics) {
         elements.profileHeatmapContainer.innerHTML = '<div style="color:var(--text-muted); font-size:11px; text-align:center; padding: 10px;">趋势热力图加载失败</div>';
     }
 }
+
+// Global Password Gate Overlay
+let isPasswordGateOpen = false;
+
+window.showPasswordGate = function() {
+    if (isPasswordGateOpen) return;
+    isPasswordGateOpen = true;
+
+    // Remove any existing password gate overlay
+    const existing = document.getElementById('password-gate-overlay');
+    if (existing) existing.remove();
+
+    // Inject CSS styles dynamically
+    if (!document.getElementById('password-gate-styles')) {
+        const style = document.createElement('style');
+        style.id = 'password-gate-styles';
+        style.innerHTML = `
+            #password-gate-overlay {
+                position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+                background: rgba(10, 11, 18, 0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+                display: flex; justify-content: center; align-items: center; z-index: 999999;
+                opacity: 0; transition: opacity 0.3s ease;
+            }
+            #password-gate-overlay.show { opacity: 1; }
+            #password-gate-card {
+                background: rgba(20, 22, 37, 0.9); border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 16px; padding: 35px 30px; width: 90%; max-width: 400px;
+                box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4), 0 0 100px rgba(99, 102, 241, 0.15);
+                text-align: center; transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            }
+            #password-gate-overlay.show #password-gate-card { transform: scale(1); }
+            .password-gate-icon {
+                width: 64px; height: 64px; background: rgba(99, 102, 241, 0.15); border-radius: 50%;
+                display: flex; justify-content: center; align-items: center; margin: 0 auto 20px;
+                color: #6366f1; font-size: 28px; box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
+            }
+            .password-gate-title { font-size: 20px; font-weight: 600; color: #ffffff; margin-bottom: 10px; }
+            .password-gate-subtitle { font-size: 13px; color: #9ca3af; margin-bottom: 25px; line-height: 1.4; }
+            .password-gate-input-wrapper { position: relative; margin-bottom: 20px; }
+            .password-gate-input {
+                width: 100%; padding: 12px 16px; background: rgba(10, 11, 18, 0.6);
+                border: 1.5px solid rgba(255, 255, 255, 0.1); border-radius: 10px;
+                color: #ffffff; font-size: 15px; outline: none; box-sizing: border-box;
+                transition: border-color 0.2s, box-shadow 0.2s;
+            }
+            .password-gate-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25); }
+            .password-gate-btn {
+                width: 100%; padding: 12px; background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+                border: none; border-radius: 10px; color: #ffffff; font-size: 15px; font-weight: 600;
+                cursor: pointer; transition: opacity 0.2s, transform 0.1s; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+            }
+            .password-gate-btn:hover { opacity: 0.95; }
+            .password-gate-btn:active { transform: scale(0.98); }
+            .password-gate-error { color: #ef4444; font-size: 13px; margin-top: 10px; height: 18px; opacity: 0; transition: opacity 0.2s; }
+            .password-gate-error.show { opacity: 1; }
+            @keyframes password-shake {
+                0%, 100% { transform: translateX(0); }
+                20%, 60% { transform: translateX(-8px); }
+                40%, 80% { transform: translateX(8px); }
+            }
+            .password-shake-animation { animation: password-shake 0.4s ease-in-out; }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // Create DOM structure
+    const overlay = document.createElement('div');
+    overlay.id = 'password-gate-overlay';
+    
+    const isEn = state.systemLang === 'en';
+    const title = isEn ? "Access Password Required" : "输入访问密码";
+    const subtitle = isEn 
+        ? "This KickRSS reader is protected. Please enter the password to unlock." 
+        : "此 KickRSS 服务受安全保护，请输入访问密码以解锁。";
+    const placeholder = isEn ? "Password" : "访问密码";
+    const btnText = isEn ? "Unlock" : "解锁";
+
+    overlay.innerHTML = `
+        <div id="password-gate-card">
+            <div class="password-gate-icon">🔒</div>
+            <div class="password-gate-title">${title}</div>
+            <div class="password-gate-subtitle">${subtitle}</div>
+            <div class="password-gate-input-wrapper">
+                <input type="password" id="password-gate-input-field" class="password-gate-input" placeholder="${placeholder}" autofocus />
+            </div>
+            <button id="password-gate-submit-btn" class="password-gate-btn">${btnText}</button>
+            <div id="password-gate-err-msg" class="password-gate-error"></div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // Force layout reflow and add show class
+    setTimeout(() => overlay.classList.add('show'), 50);
+
+    const inputField = document.getElementById('password-gate-input-field');
+    const submitBtn = document.getElementById('password-gate-submit-btn');
+    const errMsg = document.getElementById('password-gate-err-msg');
+    const card = document.getElementById('password-gate-card');
+
+    inputField.focus();
+
+    async function handleUnlock() {
+        const password = inputField.value;
+        if (!password) {
+            inputField.focus();
+            return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = isEn ? "Verifying..." : "正在验证...";
+        errMsg.classList.remove('show');
+
+        try {
+            const response = await window.fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ password })
+            });
+
+            if (response.ok) {
+                // Remove overlay and reset flag
+                overlay.classList.remove('show');
+                setTimeout(() => {
+                    overlay.remove();
+                    isPasswordGateOpen = false;
+                }, 300);
+
+                // Reload the app settings and data
+                loadSettingsOnStartup().then(() => {
+                    loadFeeds();
+                    selectGlobalUnread(true);
+                });
+            } else {
+                const errData = await response.json().catch(() => ({}));
+                const errText = errData.detail || (isEn ? "Incorrect password, please try again." : "密码错误，请重试");
+                throw new Error(errText);
+            }
+        } catch (e) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = btnText;
+            errMsg.textContent = e.message || (isEn ? "Incorrect password, please try again." : "密码错误，请重试");
+            errMsg.classList.add('show');
+            
+            // Trigger shake animation
+            card.classList.remove('password-shake-animation');
+            void card.offsetWidth; // trigger reflow
+            card.classList.add('password-shake-animation');
+            inputField.value = '';
+            inputField.focus();
+        }
+    }
+
+    submitBtn.addEventListener('click', handleUnlock);
+    inputField.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleUnlock();
+    });
+};

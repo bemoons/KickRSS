@@ -81,6 +81,10 @@ class Settings:
     def interest_profile_enabled(self) -> bool:
         return self.data.get("interest_profile_enabled", False)
 
+    @property
+    def access_password(self) -> str:
+        return self.data.get("access_password", "")
+
     def get_ai_config(self, task_name: str, summary_length: Optional[str] = None) -> Dict[str, Any]:
         ai_cfg = self.data.get("ai", {})
         default_cfg = ai_cfg.get("default", {})

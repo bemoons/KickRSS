@@ -160,7 +160,7 @@
                 <button id="mobile-back-to-entries" class="icon-btn">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
                 </button>
-                <span class="header-title">文章正文与 AI 摘要</span>
+                <span id="mobile-detail-header-title" class="header-title">文章正文与 AI 摘要</span>
             </div>
 
             <!-- Empty Detail State -->
@@ -414,23 +414,29 @@
                     <form id="system-settings-form" style="max-height: 320px; overflow-y: auto; padding-right: 8px; display: flex; flex-direction: column; gap: 16px;">
                         <!-- Group: Frontend-Backend Decoupling -->
                         <div class="settings-group">
-                            <h4 class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">🌐 API 服务器配置</h4>
-                            <div>
-                                <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">后端 API 地址 (留空表示同域托管，例如 http://localhost:8888)</label>
-                                <input type="url" id="setting-api-base" class="form-input" placeholder="例如 http://localhost:8888" style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                            <h4 id="setting-group-title-api" class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">🌐 API 服务器与安全配置</h4>
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <div>
+                                    <label id="setting-label-api-base" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">后端 API 地址 (留空表示同域托管，例如 http://localhost:8888)</label>
+                                    <input type="url" id="setting-api-base" class="form-input" placeholder="例如 http://localhost:8888" style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                </div>
+                                <div>
+                                    <label id="setting-label-access-password" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">API 访问密码 (设置密码以在公网启用单密码锁定保护，留空则不开启验证)</label>
+                                    <input type="password" id="setting-access-password" class="form-input" placeholder="留空关闭密码验证..." style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                </div>
                             </div>
                         </div>
 
                         <!-- Group: Ingestion -->
                         <div class="settings-group">
-                            <h4 class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">📡 抓取与轮询设置</h4>
+                            <h4 id="setting-group-title-fetch" class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">📡 抓取与轮询设置</h4>
                             <div class="form-row" style="display: flex; gap: 12px; margin-bottom: 10px;">
                                 <div style="flex: 1;">
-                                    <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">抓取周期 (分钟)</label>
+                                    <label id="setting-label-fetch-interval" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">抓取周期 (分钟)</label>
                                     <input type="number" id="setting-fetch-interval" class="form-input" min="1" max="1440" required style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
                                 </div>
                                 <div style="flex: 1;">
-                                    <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">全文判定长度阈值</label>
+                                    <label id="setting-label-min-text-chars" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">全文判定长度阈值</label>
                                     <input type="number" id="setting-min-text-chars" class="form-input" min="50" max="2000" required style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
                                 </div>
                             </div>
@@ -438,18 +444,18 @@
                         
                         <!-- Group: Default AI -->
                         <div class="settings-group">
-                            <h4 class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">🤖 默认 AI 端点配置 (可选)</h4>
+                            <h4 id="setting-group-title-ai" class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">🤖 默认 AI 端点配置 (可选)</h4>
                             <div style="display: flex; flex-direction: column; gap: 8px;">
                                 <div>
-                                    <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">API Base URL</label>
+                                    <label id="setting-label-ai-url" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">API Base URL</label>
                                     <input type="url" id="setting-ai-url" class="form-input" placeholder="留空以关闭 AI 功能..." style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
                                 </div>
                                 <div>
-                                    <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">API Key</label>
+                                    <label id="setting-label-ai-key" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">API Key</label>
                                     <input type="password" id="setting-ai-key" class="form-input" placeholder="输入密钥..." style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
                                 </div>
                                 <div>
-                                    <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">AI 模型名称</label>
+                                    <label id="setting-label-ai-model" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">AI 模型名称</label>
                                     <input type="text" id="setting-ai-model" class="form-input" placeholder="留空以关闭 AI 功能..." style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
@@ -457,11 +463,11 @@
                                     <span id="llm-test-result" style="font-size: 11px; color: var(--text-muted);"></span>
                                 </div>
                                 <div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); font-size: 11px;">
-                                    <span style="font-weight: 600; color: var(--text-secondary);">今日 AI Token 消耗 (Tokens):</span>
+                                    <span id="setting-label-token-consumption" style="font-weight: 600; color: var(--text-secondary);">今日 AI Token 消耗 (Tokens):</span>
                                     <div style="display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 4px; color: var(--text-muted);">
-                                        <span>输入: <strong id="token-prompt-count" style="color: var(--text-primary);">0</strong></span>
-                                        <span>输出: <strong id="token-completion-count" style="color: var(--text-primary);">0</strong></span>
-                                        <span>总计: <strong id="token-total-count" style="color: var(--text-primary);">0</strong></span>
+                                        <span><span id="setting-label-token-prompt">输入: </span><strong id="token-prompt-count" style="color: var(--text-primary);">0</strong></span>
+                                        <span><span id="setting-label-token-completion">输出: </span><strong id="token-completion-count" style="color: var(--text-primary);">0</strong></span>
+                                        <span><span id="setting-label-token-total">总计: </span><strong id="token-total-count" style="color: var(--text-primary);">0</strong></span>
                                     </div>
                                 </div>
                             </div>
@@ -469,12 +475,12 @@
 
                         <!-- Group: Task Toggles -->
                         <div class="settings-group">
-                            <h4 class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">🧠 AI 任务与自演化设置</h4>
+                            <h4 id="setting-group-title-tasks" class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">🧠 AI 任务与自演化设置</h4>
                             <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <div style="flex-grow: 1; padding-right: 12px;">
-                                        <span style="font-size: 12px; font-weight: 500; display: block; color: var(--text-primary);">点击文章时自动生成 AI 摘要</span>
-                                        <span style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px;">若关闭，则需要打开右侧对话框时才会按需生成摘要</span>
+                                        <span id="setting-label-auto-summary" style="font-size: 12px; font-weight: 500; display: block; color: var(--text-primary);">点击文章时自动生成 AI 摘要</span>
+                                        <span id="setting-desc-auto-summary" style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px;">若关闭，则需要打开右侧对话框时才会按需生成摘要</span>
                                     </div>
                                     <label class="feed-switch">
                                         <input type="checkbox" id="setting-ai-auto-summary" checked>
@@ -483,8 +489,8 @@
                                 </div>
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <div style="flex-grow: 1; padding-right: 12px;">
-                                        <span style="font-size: 12px; font-weight: 500; display: block; color: var(--text-primary);">精读文章后台预生成摘要</span>
-                                        <span style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px;">启用后，后台会在拉取到 read 注意力档的文章时自动生成摘要</span>
+                                        <span id="setting-label-pregenerate" style="font-size: 12px; font-weight: 500; display: block; color: var(--text-primary);">精读文章后台预生成摘要</span>
+                                        <span id="setting-desc-pregenerate" style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px;">启用后，后台会在拉取到 read 注意力档的文章时自动生成摘要</span>
                                     </div>
                                     <label class="feed-switch">
                                         <input type="checkbox" id="setting-ai-pregenerate">
@@ -493,8 +499,8 @@
                                 </div>
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <div style="flex-grow: 1; padding-right: 12px;">
-                                        <span style="font-size: 12px; font-weight: 500; display: block; color: var(--text-primary);">流式输出摘要和聊天</span>
-                                        <span style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px;">启用后，摘要和右侧聊天会以打字机流式效果打字输出</span>
+                                        <span id="setting-label-stream" style="font-size: 12px; font-weight: 500; display: block; color: var(--text-primary);">流式输出摘要和聊天</span>
+                                        <span id="setting-desc-stream" style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px;">启用后，摘要和右侧聊天会以打字机流式效果打字输出</span>
                                     </div>
                                     <label class="feed-switch">
                                         <input type="checkbox" id="setting-ai-stream" checked>
@@ -535,8 +541,8 @@
                                 </div>
                                 <div class="form-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
                                     <div style="padding-right: 15px;">
-                                        <label class="form-label" style="display: block; font-size: 12px; color: var(--text-primary); margin-bottom: 2px;">阅读画像与智能分级</label>
-                                        <span class="modal-desc" style="margin-bottom: 0; font-size: 11px; color: var(--text-muted); display: block; max-width: 420px; line-height: 1.4;">
+                                        <span id="setting-label-interest-profile" style="font-size: 12px; font-weight: 500; display: block; color: var(--text-primary);">阅读画像与智能分级</span>
+                                        <span id="setting-desc-interest-profile" style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px; max-width: 420px; line-height: 1.4;">
                                             开启后，系统将根据你的阅读习惯自动优化文章注意力分级。每日凌晨会消耗一次 AI 额度（约 2000-3000 token）用于分析阅读偏好。行为数据仅存储在本地。
                                         </span>
                                     </div>
@@ -547,7 +553,7 @@
                                 </div>
                                 <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;">
                                     <div style="flex: 1;">
-                                        <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;" title="未归类主题自动提升为正式抽屉所需要达到的频次门槛">自动建抽屉频次阈值</label>
+                                        <label id="setting-label-promote-threshold" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;" title="未归类主题自动提升为正式抽屉所需要达到的频次门槛">自动建抽屉频次阈值</label>
                                         <input type="number" id="setting-promote-threshold" class="form-input" min="1" max="100" required style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
                                     </div>
                                     <div style="flex: 1;">
@@ -561,12 +567,12 @@
 
                         <!-- Group: Notification Settings -->
                         <div class="settings-group">
-                            <h4 class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">📢 消息通知与应用角标 (PWA)</h4>
+                            <h4 id="setting-group-title-notifications" class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">📢 消息通知与应用角标 (PWA)</h4>
                             <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <div style="flex-grow: 1; padding-right: 12px;">
-                                        <span style="font-size: 12px; font-weight: 500; display: block; color: var(--text-primary);">未读数应用角标推送</span>
-                                        <span style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px;">开启后，手机/桌面主屏幕上应用图标将展示未读文章数量</span>
+                                        <span id="setting-label-badge-push" style="font-size: 12px; font-weight: 500; display: block; color: var(--text-primary);">未读数应用角标推送</span>
+                                        <span id="setting-desc-badge-push" style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px;">开启后，手机/桌面主屏幕上应用图标将展示未读文章数量</span>
                                     </div>
                                     <button type="button" id="btn-request-badge-permission" class="modal-btn secondary" style="font-size: 11px; padding: 6px 12px; border-radius: 6px; cursor: pointer; height: 34px; border: 1px solid rgba(99, 102, 241, 0.3); color: #818cf8; background: rgba(99, 102, 241, 0.03); transition: all 0.2s;">
                                         🔔 开启推送权限
@@ -577,23 +583,23 @@
 
                         <!-- Group: Chat (Advanced) -->
                         <div class="settings-group">
-                            <h4 class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">💬 对话 API 独立配置 (可选)</h4>
+                            <h4 id="setting-group-title-chat" class="group-title" style="font-size: 12px; text-transform: uppercase; color: var(--accent-color, #6366f1); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px;">💬 对话 API 独立配置 (可选)</h4>
                             <div style="display: flex; flex-direction: column; gap: 8px;">
                                 <div>
-                                    <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">对话 Base URL (留空默认使用全局)</label>
+                                    <label id="setting-label-chat-url" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">对话 Base URL (留空默认使用全局)</label>
                                     <input type="url" id="setting-chat-url" class="form-input" placeholder="http://..." style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
                                 </div>
                                 <div>
-                                    <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">对话 API Key (可选，留空则继承全局)</label>
+                                    <label id="setting-label-chat-key" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">对话 API Key (可选，留空则继承全局)</label>
                                     <input type="password" id="setting-chat-key" class="form-input" placeholder="api-key..." style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
                                 </div>
                                 <div style="display: flex; gap: 12px;">
                                     <div style="flex: 1;">
-                                        <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">对话模型名称 (留空默认)</label>
+                                        <label id="setting-label-chat-model" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">对话模型名称 (留空默认)</label>
                                         <input type="text" id="setting-chat-model" class="form-input" placeholder="默认..." style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
                                     </div>
                                     <div style="flex: 1;">
-                                        <label class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">对话 Token 限制</label>
+                                        <label id="setting-label-chat-tokens" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">对话 Token 限制</label>
                                         <input type="number" id="setting-chat-tokens" class="form-input" min="100" max="8000" style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
                                     </div>
                                 </div>
@@ -644,13 +650,13 @@
                                 </div>
                                 <!-- Legend -->
                                 <div id="profile-heatmap-legend" style="display: flex; justify-content: flex-end; align-items: center; gap: 4px; font-size: 10px; color: var(--text-secondary); margin-top: 8px;">
-                                    <span>少</span>
+                                    <span id="profile-heatmap-legend-less">少</span>
                                     <div style="width: 10px; height: 10px; background: transparent; border: 1px solid var(--border-color);"></div>
                                     <div style="width: 10px; height: 10px; background: rgba(99,102,241,0.25);"></div>
                                     <div style="width: 10px; height: 10px; background: rgba(99,102,241,0.5);"></div>
                                     <div style="width: 10px; height: 10px; background: rgba(99,102,241,0.75);"></div>
                                     <div style="width: 10px; height: 10px; background: rgba(99,102,241,1);"></div>
-                                    <span>多</span>
+                                    <span id="profile-heatmap-legend-more">多</span>
                                 </div>
                             </div>
                         </div>
@@ -660,7 +666,7 @@
                         </div>
                         <!-- Category Reading Distribution -->
                         <div>
-                            <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: var(--text-secondary);">📊 分类阅读分布</h4>
+                            <h4 id="profile-label-category-distribution" style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: var(--text-secondary);">📊 分类阅读分布</h4>
                             <div id="profile-category-distribution-list" style="display: flex; flex-direction: column; gap: 8px; padding: 12px; background: rgba(0,0,0,0.1); border-radius: 8px; border: 1px solid var(--border-color);">
                                 <!-- Dynamically generated list -->
                             </div>
@@ -672,22 +678,22 @@
                         <!-- Common Stats Cards -->
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
                             <div class="profile-stat-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; text-align: center;">
-                                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">近30天总阅读</div>
+                                <div id="profile-label-stat-total" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">近30天总阅读</div>
                                 <div id="profile-stat-total" style="font-size: 18px; font-weight: 700; color: var(--text-primary);">0</div>
                             </div>
                             <div class="profile-stat-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; text-align: center;">
-                                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">深度阅读 (读)</div>
+                                <div id="profile-label-stat-high" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">深度阅读 (读)</div>
                                 <div id="profile-stat-high" style="font-size: 18px; font-weight: 700; color: var(--accent-indigo, #6366f1);">0</div>
                             </div>
                             <div class="profile-stat-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; text-align: center;">
-                                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">快速跳过 (看)</div>
+                                <div id="profile-label-stat-low" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">快速跳过 (看)</div>
                                 <div id="profile-stat-low" style="font-size: 18px; font-weight: 700; color: var(--text-muted);">0</div>
                             </div>
                         </div>
                         
                         <!-- Interest Tag Cloud -->
                         <div>
-                            <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: var(--text-secondary);">🎯 兴趣标签云 (点击标签查看详情)</h4>
+                            <h4 id="profile-label-tag-cloud" style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: var(--text-secondary);">🎯 兴趣标签云 (点击标签查看详情)</h4>
                             <div id="profile-tag-cloud" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; padding: 15px; background: rgba(0,0,0,0.1); border-radius: 8px; border: 1px solid var(--border-color); min-height: 80px; align-items: center;">
                                 <!-- Dynamically generated tags -->
                             </div>
@@ -701,9 +707,9 @@
                             </div>
                             <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
                                 <div id="profile-detail-stats" style="display: flex; gap: 16px; font-size: 11px; color: var(--text-secondary);">
-                                    <div>深度阅读: <span id="profile-detail-count" style="font-weight: 600; color: var(--text-primary);">0</span> 篇</div>
-                                    <div>已收藏: <span id="profile-detail-starred" style="font-weight: 600; color: var(--text-primary);">0</span> 篇</div>
-                                    <div>访问原文: <span id="profile-detail-original" style="font-weight: 600; color: var(--text-primary);">0</span> 次</div>
+                                    <div id="profile-detail-label-count">深度阅读: <span id="profile-detail-count" style="font-weight: 600; color: var(--text-primary);">0</span> 篇</div>
+                                    <div id="profile-detail-label-starred">已收藏: <span id="profile-detail-starred" style="font-weight: 600; color: var(--text-primary);">0</span> 篇</div>
+                                    <div id="profile-detail-label-original">访问原文: <span id="profile-detail-original" style="font-weight: 600; color: var(--text-primary);">0</span> 次</div>
                                 </div>
                                 <!-- Weekly Trend Chart -->
                                 <div>
@@ -714,7 +720,7 @@
                                 </div>
                                 <!-- Articles list -->
                                 <div>
-                                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">代表文章</div>
+                                    <div id="profile-detail-label-articles" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">代表文章</div>
                                     <div id="profile-detail-articles" style="display: flex; flex-direction: column; gap: 6px; max-height: 150px; overflow-y: auto;">
                                         <!-- List of articles -->
                                     </div>
@@ -724,20 +730,20 @@
 
                         <!-- Heatmap Grid -->
                         <div>
-                            <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: var(--text-secondary);">📅 话题关注趋势 (近4周)</h4>
+                            <h4 id="profile-label-heatmap" style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: var(--text-secondary);">📅 话题关注趋势 (近4周)</h4>
                             <div style="padding: 15px; background: rgba(0,0,0,0.1); border-radius: 8px; border: 1px solid var(--border-color); overflow-x: auto;">
                                 <div id="profile-heatmap-container" style="display: flex; flex-direction: column; gap: 6px; min-width: 480px;">
                                     <!-- Grid rows -->
                                 </div>
                                 <!-- Legend -->
                                 <div style="display: flex; justify-content: flex-end; align-items: center; gap: 4px; font-size: 10px; color: var(--text-secondary); margin-top: 8px;">
-                                    <span>少</span>
+                                    <span id="profile-heatmap-legend-less2">少</span>
                                     <div style="width: 10px; height: 10px; background: transparent; border: 1px solid var(--border-color);"></div>
                                     <div style="width: 10px; height: 10px; background: rgba(99,102,241,0.25);"></div>
                                     <div style="width: 10px; height: 10px; background: rgba(99,102,241,0.5);"></div>
                                     <div style="width: 10px; height: 10px; background: rgba(99,102,241,0.75);"></div>
                                     <div style="width: 10px; height: 10px; background: rgba(99,102,241,1);"></div>
-                                    <span>多</span>
+                                    <span id="profile-heatmap-legend-more2">多</span>
                                 </div>
                             </div>
                         </div>
