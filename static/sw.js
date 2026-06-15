@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kickrss-v3';
+const CACHE_NAME = 'kickrss-v4';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -48,12 +48,50 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       caches.match(e.request).then((cachedResponse) => {
         if (cachedResponse) {
+          // WebKit bug: if cached response was saved with a redirected status, clean it
+          if (cachedResponse.redirected) {
+            return cleanRedirectedResponse(cachedResponse);
+          }
           return cachedResponse;
         }
-        return fetch(e.request);
+        
+        // Fetch from network with follow redirect option for navigation
+        const fetchRequest = (e.request.mode === 'navigate')
+          ? new Request(e.request, { redirect: 'follow' })
+          : e.request;
+
+        return fetch(fetchRequest).then((networkResponse) => {
+          const isRedirected = networkResponse.redirected || 
+                               networkResponse.type === 'opaqueredirect' || 
+                               (networkResponse.status >= 300 && networkResponse.status < 400);
+
+          if (isRedirected) {
+            if (e.request.mode === 'navigate') {
+              // Navigation requests: redirect client-side to strip Safari redirection metadata
+              const redirectUrl = networkResponse.url || e.request.url;
+              return new Response(
+                `<script>window.location.replace("${redirectUrl}");</script>`,
+                { headers: { 'Content-Type': 'text/html' } }
+              );
+            } else {
+              // Static asset requests: clean it
+              return cleanRedirectedResponse(networkResponse);
+            }
+          }
+          return networkResponse;
+        }).catch(() => {
+          return caches.match(e.request);
+        });
       })
     );
   }
-  // All other requests (like /feeds, /entries, etc.) bypass the Service Worker
-  // letting the native browser stack handle auth credentials/cookies correctly.
 });
+
+// Helper to strip redirected flag from a Response object (WebKit/Safari requirement)
+function cleanRedirectedResponse(response) {
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers
+  });
+}
