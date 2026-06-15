@@ -80,7 +80,8 @@ const state = {
     interestProfileEnabled: false,
     profileTrendView: 'week', // 'week' or 'month'
     interestProfileData: null,
-    backToFeedsFromDetail: false
+    backToFeedsFromDetail: false,
+    loadSessionId: 0
 };
 
 let currentEngagement = null;
@@ -1202,15 +1203,20 @@ function selectStarredView(isStartup = false) {
 
 async function loadStarredEntries(appendMode = false) {
     if (!appendMode) {
+        state.loadSessionId = (state.loadSessionId || 0) + 1;
         state.entriesOffset = 0;
         state.hasMoreEntries = true;
         elements.entriesList.innerHTML = '<div class="loading-placeholder">正在加载收藏文章...</div>';
     }
+    const currentSessionId = state.loadSessionId;
     try {
         const offset = state.entriesOffset;
         const limit = state.entriesLimit;
         const response = await fetch(`/entries/starred?unread=0&limit=${limit}&offset=${offset}`);
         const data = await response.json();
+        
+        if (currentSessionId !== state.loadSessionId) return;
+        if (state.activeView !== 'starred') return;
         
         if (data.length < limit) {
             state.hasMoreEntries = false;
@@ -1254,16 +1260,21 @@ async function selectFeed(feedId) {
 
 async function loadFeedEntries(feedId, appendMode = false) {
     if (!appendMode) {
+        state.loadSessionId = (state.loadSessionId || 0) + 1;
         state.entriesOffset = 0;
         state.hasMoreEntries = true;
         elements.entriesList.innerHTML = '<div class="loading-placeholder">正在加载订阅源文章...</div>';
     }
+    const currentSessionId = state.loadSessionId;
     try {
         const offset = state.entriesOffset;
         const limit = state.entriesLimit;
         const unreadParam = state.filterUnreadOnly ? 1 : 0;
         const response = await fetch(`/feeds/${feedId}/entries?unread=${unreadParam}&limit=${limit}&offset=${offset}`);
         const data = await response.json();
+        
+        if (currentSessionId !== state.loadSessionId) return;
+        if (state.activeView !== 'feed' || state.selectedFeedId !== feedId) return;
         
         if (data.length < limit) {
             state.hasMoreEntries = false;
@@ -1286,15 +1297,20 @@ async function loadFeedEntries(feedId, appendMode = false) {
 
 async function loadSearchEntries(query, appendMode = false) {
     if (!appendMode) {
+        state.loadSessionId = (state.loadSessionId || 0) + 1;
         state.entriesOffset = 0;
         state.hasMoreEntries = true;
         elements.entriesList.innerHTML = '<div class="loading-placeholder">正在搜索文章...</div>';
     }
+    const currentSessionId = state.loadSessionId;
     try {
         const offset = state.entriesOffset;
         const limit = state.entriesLimit;
         const response = await fetch(`/search?q=${encodeURIComponent(query)}&unread=0&limit=${limit}&offset=${offset}`);
         const data = await response.json();
+        
+        if (currentSessionId !== state.loadSessionId) return;
+        if (state.activeView !== 'search' || elements.searchInput.value.trim() !== query) return;
         
         if (data.length < limit) {
             state.hasMoreEntries = false;
@@ -1351,15 +1367,20 @@ function selectCategory(feedId, catId, catName) {
 // ----------------------------------------------------
 async function loadUnreadEntries(appendMode = false) {
     if (!appendMode) {
+        state.loadSessionId = (state.loadSessionId || 0) + 1;
         state.entriesOffset = 0;
         state.hasMoreEntries = true;
         elements.entriesList.innerHTML = '<div class="loading-placeholder">正在加载未读文章...</div>';
     }
+    const currentSessionId = state.loadSessionId;
     try {
         const offset = state.entriesOffset;
         const limit = state.entriesLimit;
         const response = await fetch(`/entries/unread?limit=${limit}&offset=${offset}`);
         const data = await response.json();
+        
+        if (currentSessionId !== state.loadSessionId) return;
+        if (state.activeView !== 'unread') return;
         
         if (data.length < limit) {
             state.hasMoreEntries = false;
@@ -1382,16 +1403,21 @@ async function loadUnreadEntries(appendMode = false) {
 
 async function loadCategoryEntries(catId, appendMode = false) {
     if (!appendMode) {
+        state.loadSessionId = (state.loadSessionId || 0) + 1;
         state.entriesOffset = 0;
         state.hasMoreEntries = true;
         elements.entriesList.innerHTML = '<div class="loading-placeholder">正在加载文章列表...</div>';
     }
+    const currentSessionId = state.loadSessionId;
     try {
         const offset = state.entriesOffset;
         const limit = state.entriesLimit;
         const unreadParam = state.filterUnreadOnly ? 1 : 0;
         const response = await fetch(`/categories/${catId}/entries?unread=${unreadParam}&limit=${limit}&offset=${offset}`);
         const data = await response.json();
+        
+        if (currentSessionId !== state.loadSessionId) return;
+        if (state.activeView !== 'category' || state.selectedCategoryId !== catId) return;
         
         const feed = state.feeds.find(f => f.id === state.selectedFeedId);
         data.forEach(entry => {
@@ -1643,6 +1669,7 @@ function refreshEntriesList(appendMode = false, newAddedData = []) {
 
 async function loadMoreEntries() {
     if (state.isLoadingMore || !state.hasMoreEntries) return;
+    if (state.entriesOffset === 0) return;
     
     state.isLoadingMore = true;
     
@@ -3600,15 +3627,20 @@ function selectNotesView(isStartup = false) {
 
 async function loadNotesEntries(appendMode = false) {
     if (!appendMode) {
+        state.loadSessionId = (state.loadSessionId || 0) + 1;
         state.entriesOffset = 0;
         state.hasMoreEntries = true;
         elements.entriesList.innerHTML = '<div class="loading-placeholder">正在加载笔记文章...</div>';
     }
+    const currentSessionId = state.loadSessionId;
     try {
         const offset = state.entriesOffset;
         const limit = state.entriesLimit;
         const response = await fetch(`/entries/notes?limit=${limit}&offset=${offset}`);
         const data = await response.json();
+        
+        if (currentSessionId !== state.loadSessionId) return;
+        if (state.activeView !== 'notes') return;
         
         if (data.length < limit) {
             state.hasMoreEntries = false;
