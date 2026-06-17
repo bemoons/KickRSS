@@ -109,6 +109,7 @@ const elements = {
     artDate: document.getElementById('art-date'),
     artOriginalLink: document.getElementById('art-original-link'),
     artToggleReadBtn: document.getElementById('art-toggle-read-btn'),
+    artShareBtn: document.getElementById('art-share-btn'),
     attnBtnGlance: document.getElementById('attn-btn-glance'),
     attnBtnSkim: document.getElementById('attn-btn-skim'),
     attnBtnRead: document.getElementById('attn-btn-read'),
@@ -719,6 +720,9 @@ function initEventListeners() {
     }
     if (elements.artToggleStarBtn) {
         elements.artToggleStarBtn.addEventListener('click', toggleCurrentEntryStarStatus);
+    }
+    if (elements.artShareBtn) {
+        elements.artShareBtn.addEventListener('click', shareArticle);
     }
     if (elements.toggleFulltextBtn) {
         elements.toggleFulltextBtn.addEventListener('click', toggleFulltextExpansion);
@@ -2235,6 +2239,43 @@ async function toggleCurrentEntryStarStatus() {
         console.error("Failed to toggle current entry star status:", err);
     } finally {
         elements.artToggleStarBtn.disabled = false;
+    }
+}
+
+async function shareArticle() {
+    if (!state.currentOpenEntry) return;
+    const title = state.currentOpenEntry.title;
+    const url = state.currentOpenEntry.url;
+    
+    const shareData = {
+        title: title,
+        text: title,
+        url: url
+    };
+    
+    const lang = state.systemLang || 'zh';
+    
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+        try {
+            await navigator.share(shareData);
+            return;
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                console.error('Share failed:', err);
+            } else {
+                return; // User cancelled
+            }
+        }
+    }
+    
+    // Fallback: Copy to clipboard
+    try {
+        const textToCopy = `${title}\n${url}`;
+        await navigator.clipboard.writeText(textToCopy);
+        alert(TRANSLATIONS[lang]["share_copied"] || "文章标题与链接已复制到剪贴板，可直接粘贴分享！");
+    } catch (clipErr) {
+        console.error('Clipboard copy failed:', clipErr);
+        alert(`${title}: ${url}`);
     }
 }
 
@@ -4200,6 +4241,8 @@ const TRANSLATIONS = {
         "settings_chat_key_label": "对话 API Key (可选，留空则继承全局)",
         "settings_chat_model_label": "对话模型名称 (留空默认)",
         "settings_chat_tokens_label": "对话 Token 限制",
+        "share": "分享",
+        "share_copied": "文章标题与链接已复制到剪贴板，可直接粘贴分享！",
         "settings_api_base_placeholder": "例如 http://localhost:8888",
         "settings_access_password_placeholder": "留空关闭密码验证...",
         "setting_label_enable_auth": "启用安全密码保护",
@@ -4357,6 +4400,8 @@ const TRANSLATIONS = {
         "settings_chat_key_label": "對話 API Key (可選，留空則繼承全局)",
         "settings_chat_model_label": "對話模型名稱 (留空默認)",
         "settings_chat_tokens_label": "對話 Token 限制",
+        "share": "分享",
+        "share_copied": "文章標題與連結已複製到剪貼簿，可直接貼上分享！",
         "settings_api_base_placeholder": "例如 http://localhost:8888",
         "settings_access_password_placeholder": "留空關閉密碼驗證...",
         "setting_label_enable_auth": "啟用安全密碼保護",
@@ -4514,6 +4559,8 @@ const TRANSLATIONS = {
         "settings_chat_key_label": "Chat API Key (Leave empty to inherit global)",
         "settings_chat_model_label": "Chat Model Name (Leave empty for default)",
         "settings_chat_tokens_label": "Chat Token Limit",
+        "share": "Share",
+        "share_copied": "Article title and URL copied to clipboard!",
         "settings_api_base_placeholder": "e.g. http://localhost:8888",
         "settings_access_password_placeholder": "Leave empty to disable password verification...",
         "setting_label_enable_auth": "Enable Password Protection",
@@ -4671,6 +4718,8 @@ const TRANSLATIONS = {
         "settings_chat_key_label": "チャットAPI Key (任意、空欄でグローバルを継承)",
         "settings_chat_model_label": "チャットモデル名 (空欄でデフォルト)",
         "settings_chat_tokens_label": "チャットToken制限",
+        "share": "共有",
+        "share_copied": "記事のタイトルとURLがクリップボードにコピーされました！",
         "settings_api_base_placeholder": "例: http://localhost:8888",
         "settings_access_password_placeholder": "空欄でパスワード検証を無効にする...",
         "setting_label_enable_auth": "パスワード保護を有効にする",
@@ -4828,6 +4877,8 @@ const TRANSLATIONS = {
         "settings_chat_key_label": "채팅 API Key (선택 사항, 공란 시 글로벌 설정 상속)",
         "settings_chat_model_label": "채팅 모델명 (공란 시 기본값)",
         "settings_chat_tokens_label": "채팅 토큰 제한",
+        "share": "공유",
+        "share_copied": "기사 제목과 URL이 클립보드에 복사되었습니다!",
         "settings_api_base_placeholder": "예: http://localhost:8888",
         "settings_access_password_placeholder": "비밀번호 검증을 비활성화하려면 비워 둠...",
         "setting_label_enable_auth": "비밀번호 보호 활성화",
@@ -4985,6 +5036,8 @@ const TRANSLATIONS = {
         "settings_chat_key_label": "Clé API chat (Optionnel, laisser vide pour hériter du global)",
         "settings_chat_model_label": "Nom du modèle chat (Laisser vide pour défaut)",
         "settings_chat_tokens_label": "Limite de jetons chat",
+        "share": "Partager",
+        "share_copied": "Titre et lien de l'article copiés dans le presse-papiers !",
         "settings_api_base_placeholder": "ex. http://localhost:8888",
         "settings_access_password_placeholder": "Laisser vide pour désactiver l'authentification...",
         "setting_label_enable_auth": "Activer la protection par mot de passe",
@@ -5142,6 +5195,8 @@ const TRANSLATIONS = {
         "settings_chat_key_label": "Clave API chat (Opcional, dejar vacío para heredar del global)",
         "settings_chat_model_label": "Nombre del modelo chat (Dejar vacío para predeterminado)",
         "settings_chat_tokens_label": "Límite de tokens chat",
+        "share": "Compartir",
+        "share_copied": "¡Título y enlace del artículo copiados al portapapeles!",
         "settings_api_base_placeholder": "p. ej. http://localhost:8888",
         "settings_access_password_placeholder": "Dejar vacío para desactivar la autenticación...",
         "setting_label_enable_auth": "Activar protección por contraseña",
@@ -5299,6 +5354,8 @@ const TRANSLATIONS = {
         "settings_chat_key_label": "Chat-API Key (Optional, leer lassen, um globale Einstellung zu übernehmen)",
         "settings_chat_model_label": "Chat-Modellname (Leer lassen für Standard)",
         "settings_chat_tokens_label": "Chat Token-Limit",
+        "share": "Teilen",
+        "share_copied": "Titel und Link des Artikels in die Zwischenablage kopiert!",
         "settings_api_base_placeholder": "z. B. http://localhost:8888",
         "settings_access_password_placeholder": "Leer lassen, um die Passwortprüfung zu deaktivieren...",
         "setting_label_enable_auth": "Passwortschutz aktivieren",
@@ -5416,6 +5473,15 @@ function updateUILanguage(lang) {
             const textVal = state.currentOpenEntry.is_starred ? TRANSLATIONS[lang]["unstar"] : TRANSLATIONS[lang]["star"];
             if (btnText) btnText.textContent = textVal;
             else elements.artToggleStarBtn.textContent = textVal;
+        }
+        
+        // Share Button
+        if (elements.artShareBtn) {
+            const btnText = elements.artShareBtn.querySelector('.btn-text');
+            const textVal = TRANSLATIONS[lang]["share"];
+            if (btnText) btnText.textContent = textVal;
+            else elements.artShareBtn.textContent = textVal;
+            elements.artShareBtn.title = textVal;
         }
  
         // Bilingual Translation Button
