@@ -170,7 +170,7 @@ def login(request: Request, data: LoginRequest, response: Response):
             httponly=True,
             path="/",
             samesite="lax",
-            secure=True
+            secure=False  # HTTP 访问时不需 secure 标志
         )
         return {"ok": True}
         

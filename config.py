@@ -101,7 +101,7 @@ class Settings:
                 pass
                 
             if is_numeric:
-                max_tokens = max(target_num * 2, 300)
+                max_tokens = max(target_num * 3, 1000)
             elif len_val == "short":
                 max_tokens = 300
             elif len_val == "long":
