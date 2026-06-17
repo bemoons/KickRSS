@@ -170,7 +170,7 @@ def login(request: Request, data: LoginRequest, response: Response):
             httponly=True,
             path="/",
             samesite="lax",
-            secure=False
+            secure=True
         )
         return {"ok": True}
         

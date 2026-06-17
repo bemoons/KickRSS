@@ -1,7 +1,5 @@
-const CACHE_NAME = 'kickrss-v3';
+const CACHE_NAME = 'kickrss-v6';
 const ASSETS_TO_CACHE = [
-  './',
-  './index.html',
   './style.css',
   './app.js',
   './manifest.json',
@@ -32,14 +30,15 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
+  // 1. Bypass Service Worker entirely for navigation requests to prevent WebKit redirection/cross-origin crashes
+  if (e.request.mode === 'navigate') {
+    return;
+  }
+
   const url = new URL(e.request.url);
   
-  // Normalize paths to check if they match our cached static assets
-  const cleanPath = url.pathname.endsWith('/') ? url.pathname : url.pathname + '/';
-  const isRoot = url.pathname === '/' || url.pathname === '/index.html' || cleanPath === self.location.pathname;
-  
-  const isStaticAsset = isRoot || ASSETS_TO_CACHE.some(asset => {
-    if (asset === './' || asset === '.') return false;
+  // 2. Check if the request is for a cached static asset
+  const isStaticAsset = ASSETS_TO_CACHE.some(asset => {
     const assetUrl = new URL(asset, self.location.href);
     return url.pathname === assetUrl.pathname;
   });
@@ -48,12 +47,31 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       caches.match(e.request).then((cachedResponse) => {
         if (cachedResponse) {
+          // WebKit bug: if cached response was saved with a redirected status, clean it
+          if (cachedResponse.redirected) {
+            return cleanRedirectedResponse(cachedResponse);
+          }
           return cachedResponse;
         }
-        return fetch(e.request);
+        
+        return fetch(e.request).then((networkResponse) => {
+          if (networkResponse.redirected) {
+            return cleanRedirectedResponse(networkResponse);
+          }
+          return networkResponse;
+        }).catch(() => {
+          return caches.match(e.request);
+        });
       })
     );
   }
-  // All other requests (like /feeds, /entries, etc.) bypass the Service Worker
-  // letting the native browser stack handle auth credentials/cookies correctly.
 });
+
+// Helper to strip redirected flag from a Response object (WebKit/Safari requirement)
+function cleanRedirectedResponse(response) {
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers
+  });
+}

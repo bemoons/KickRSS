@@ -218,6 +218,10 @@
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
                                 <span class="btn-text">原文</span>
                             </a>
+                            <button id="art-share-btn" class="bar-icon-btn share" title="分享">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+                                <span class="btn-text">分享</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -420,9 +424,27 @@
                                     <label id="setting-label-api-base" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">后端 API 地址 (留空表示同域托管，例如 http://localhost:8888)</label>
                                     <input type="url" id="setting-api-base" class="form-input" placeholder="例如 http://localhost:8888" style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
                                 </div>
-                                <div>
-                                    <label id="setting-label-access-password" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">API 访问密码 (设置密码以在公网启用单密码锁定保护，留空则不开启验证)</label>
-                                    <input type="password" id="setting-access-password" class="form-input" placeholder="留空关闭密码验证..." style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="setting-enable-auth" style="margin: 0; width: 14px; height: 14px; cursor: pointer;">
+                                        <label for="setting-enable-auth" id="setting-label-enable-auth" style="font-size: 12px; color: var(--text-primary); cursor: pointer; font-weight: 500;">启用安全密码保护</label>
+                                        <button type="button" id="setting-btn-change-password" style="display: none; margin-left: auto; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: rgba(255,255,255,0.05); color: var(--text-secondary); font-size: 11px; cursor: pointer;">修改密码</button>
+                                    </div>
+                                    
+                                    <div id="password-fields-container" style="display: none; flex-direction: column; gap: 8px; border-left: 2px solid var(--accent-color, #6366f1); padding-left: 10px; margin-left: 6px; margin-top: 4px;">
+                                        <div id="old-password-group" style="display: none;">
+                                            <label id="setting-label-old-password" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">当前旧密码</label>
+                                            <input type="password" id="setting-old-password" class="form-input" placeholder="输入当前旧密码..." style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                        </div>
+                                        <div id="new-password-group">
+                                            <label id="setting-label-new-password" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">输入新密码</label>
+                                            <input type="password" id="setting-new-password" class="form-input" placeholder="输入新密码..." style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                        </div>
+                                        <div id="confirm-password-group">
+                                            <label id="setting-label-confirm-password" class="form-label" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">确认新密码</label>
+                                            <input type="password" id="setting-confirm-password" class="form-input" placeholder="再次输入新密码..." style="width: 100%; height: 34px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 12px;">
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
