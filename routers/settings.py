@@ -56,56 +56,74 @@ def update_settings(update: SettingsUpdate):
 
 class TestLLMRequest(BaseModel):
     ai_base_url: str
-    ai_api_key: str
+    ai_api_key: Optional[str] = None
     ai_model: str
 
 @router.post("/settings/test-llm")
 def test_llm_connection(req: TestLLMRequest):
-    import httpx
-    import time
-    
-    url = f"{req.ai_base_url.rstrip('/')}/chat/completions"
-    headers = {"Content-Type": "application/json"}
-    if req.ai_api_key:
-        headers["Authorization"] = f"Bearer {req.ai_api_key}"
-        
-    payload = {
-        "model": req.ai_model,
-        "messages": [
-            {"role": "user", "content": "ping"}
-        ],
-        "max_tokens": 10
-    }
-    
-    start_time = time.time()
+    import ai
     try:
-        with httpx.Client(timeout=10.0) as client:
-            response = client.post(url, headers=headers, json=payload)
-        
-        duration = time.time() - start_time
-        
-        if response.status_code != 200:
-            return {
-                "success": False,
-                "message": f"API 返回状态码 {response.status_code}: {response.text}"
-            }
-            
-        result = response.json()
-        if "choices" not in result or len(result["choices"]) == 0:
-            return {
-                "success": False,
-                "message": "API 返回的 choices 列表为空"
-            }
-            
+        content, reasoning_status = ai.test_llm_reasoning(req.ai_base_url, req.ai_api_key or "", req.ai_model)
         return {
             "success": True,
             "message": "连接成功！",
-            "model_response": result["choices"][0]["message"]["content"]
+            "model_response": content,
+            "reasoning_status": reasoning_status
         }
     except Exception as e:
         return {
             "success": False,
-            "message": f"请求接口失败: {str(e)}"
+            "message": f"测试连接失败: {str(e)}"
+        }
+
+class GetModelsRequest(BaseModel):
+    ai_base_url: str
+    ai_api_key: Optional[str] = None
+
+@router.post("/settings/get-models")
+def get_models(req: GetModelsRequest):
+    import httpx
+    url = f"{req.ai_base_url.rstrip('/')}/models"
+    headers = {"Content-Type": "application/json"}
+    if req.ai_api_key:
+        headers["Authorization"] = f"Bearer {req.ai_api_key}"
+        
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.get(url, headers=headers)
+            
+        if response.status_code != 200:
+            return {
+                "success": False,
+                "message": f"获取模型列表失败，状态码 {response.status_code}: {response.text}"
+            }
+            
+        result = response.json()
+        
+        # Check standard OpenAI format
+        if "data" in result:
+            models = [m["id"] for m in result["data"] if "id" in m]
+            models.sort()
+            return {"success": True, "models": models}
+            
+        # Check Ollama format
+        if "models" in result:
+            models = []
+            for m in result["models"]:
+                name = m.get("name") or m.get("model")
+                if name:
+                    models.append(name)
+            models.sort()
+            return {"success": True, "models": models}
+            
+        return {
+            "success": False,
+            "message": "解析模型列表响应失败，不支持的返回格式"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"获取模型列表失败: {str(e)}"
         }
 
 @router.get("/settings/token-stats")

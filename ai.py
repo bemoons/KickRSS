@@ -25,7 +25,8 @@ def estimate_clean_text_length(text: str) -> int:
 def call_chat_completion(
     config: Dict[str, Any], 
     messages: List[Dict[str, str]], 
-    response_format_json: bool = True
+    response_format_json: bool = True,
+    disable_reasoning: bool = True
 ) -> str:
     """
     Perform a POST request to the OpenAI-compatible endpoint.
@@ -49,11 +50,25 @@ def call_chat_completion(
     if response_format_json:
         payload["response_format"] = {"type": "json_object"}
         
+    disabler_added = False
+    if disable_reasoning:
+        append_reasoning_disabler(payload, config["model"], config["base_url"])
+        disabler_added = True
+        
     try:
         try:
             with httpx.Client(timeout=120.0) as client:
                 response = client.post(url, headers=headers, json=payload)
             
+            # If 400 Bad Request and we added disablers, retry without them
+            if response.status_code == 400 and disabler_added:
+                logger.warning("Endpoint returned 400; retrying without reasoning disablers")
+                for field in ["chat_template_kwargs", "thinking", "thinking_config", "think", "enable_thinking"]:
+                    payload.pop(field, None)
+                disabler_added = False
+                with httpx.Client(timeout=120.0) as client:
+                    response = client.post(url, headers=headers, json=payload)
+                    
             # Fallback if JSON mode is not supported by the endpoint (e.g. returns 400 Bad Request)
             if response.status_code == 400 and response_format_json:
                 logger.warning("Endpoint returned 400; retrying without response_format='json_object'")
@@ -63,9 +78,11 @@ def call_chat_completion(
             
             response.raise_for_status()
         except Exception as initial_err:
-            if response_format_json:
-                logger.warning(f"Initial request failed with {initial_err}; retrying without response_format='json_object'")
+            if response_format_json or disabler_added:
+                logger.warning(f"Initial request failed with {initial_err}; retrying with absolute fallback")
                 payload.pop("response_format", None)
+                for field in ["chat_template_kwargs", "thinking", "thinking_config", "think", "enable_thinking"]:
+                    payload.pop(field, None)
                 with httpx.Client(timeout=120.0) as client:
                     response = client.post(url, headers=headers, json=payload)
                 response.raise_for_status()
@@ -103,6 +120,7 @@ def call_chat_completion(
                 # Fallback: use reasoning as-is
                 content = reasoning
         
+        content = clean_think_block(content)
         return content
     except Exception as e:
         logger.error(f"Error calling AI completions API at {url}: {e}", exc_info=True)
@@ -416,41 +434,69 @@ def generate_summary_stream(
     }
     if config.get("max_tokens"):
         payload["max_tokens"] = config["max_tokens"]
+
+    append_reasoning_disabler(payload, config["model"], config["base_url"])
+    
+    def fetch_stream(use_disabler):
+        current_payload = dict(payload)
+        if not use_disabler:
+            for field in ["chat_template_kwargs", "thinking", "thinking_config", "think", "enable_thinking"]:
+                current_payload.pop(field, None)
+                
+        filter_obj = ThinkFilter()
+        buffer = ""
+        in_summary = False
         
-    try:
-        logger.info(f"Starting stream summary request to {url_endpoint} with model {config['model']}")
-        with httpx.stream("POST", url_endpoint, headers=headers, json=payload, timeout=120.0) as response:
+        with httpx.stream("POST", url_endpoint, headers=headers, json=current_payload, timeout=120.0) as response:
+            if response.status_code == 400 and use_disabler:
+                raise ValueError("retry_without_disablers")
             response.raise_for_status()
-            chunk_count = 0
-            buffer = ""
-            in_summary = False
+            
             for line in response.iter_lines():
                 if not line.startswith("data:"):
                     continue
                 data_str = line[5:].strip()
                 if data_str == "[DONE]":
-                    logger.info(f"Stream summary received [DONE] after {chunk_count} chunks")
                     break
                 try:
                     data = json.loads(data_str)
                     delta = data["choices"][0]["delta"]
-                    # Get content or reasoning_content
-                    text = delta.get("content") or delta.get("reasoning_content")
+                    text = delta.get("content")
                     if text is not None:
-                        buffer += text
-                        # Check if SUMMARY: appears
-                        if not in_summary and "SUMMARY:" in buffer:
-                            # Extract everything after SUMMARY:
-                            parts = buffer.split("SUMMARY:", 1)
-                            buffer = parts[1].strip()
-                            in_summary = True
-                        # If in_summary, yield the text
-                        if in_summary:
-                            chunk_count += 1
-                            yield text
+                        filtered = filter_obj.filter(text)
+                        if filtered:
+                            buffer += filtered
+                            if not in_summary and "SUMMARY:" in buffer:
+                                parts = buffer.split("SUMMARY:", 1)
+                                yield_text = parts[1].strip()
+                                in_summary = True
+                                if yield_text:
+                                    yield yield_text
+                                buffer = ""
+                            elif in_summary:
+                                yield filtered
                 except Exception as parse_err:
                     logger.debug(f"Stream parse error: {parse_err}")
-            logger.info(f"Stream summary completed with {chunk_count} chunks")
+                    
+            flushed = filter_obj.flush()
+            if flushed:
+                if in_summary:
+                    yield flushed
+                else:
+                    buffer += flushed
+                    if "SUMMARY:" in buffer:
+                        parts = buffer.split("SUMMARY:", 1)
+                        yield parts[1].strip()
+
+    try:
+        try:
+            yield from fetch_stream(use_disabler=True)
+        except ValueError as e:
+            if str(e) == "retry_without_disablers":
+                logger.warning("Stream request returned 400; retrying without reasoning disablers")
+                yield from fetch_stream(use_disabler=False)
+            else:
+                raise
     except Exception as e:
         logger.error(f"Error in stream summary: {e}", exc_info=True)
         raise
@@ -566,6 +612,7 @@ def generate_chat_response_stream(
         payload["max_tokens"] = config["max_tokens"]
         
     try:
+        filter_obj = ThinkFilter()
         with httpx.stream("POST", url_endpoint, headers=headers, json=payload, timeout=30.0) as response:
             response.raise_for_status()
             for line in response.iter_lines():
@@ -576,13 +623,16 @@ def generate_chat_response_stream(
                     try:
                         data = json.loads(data_str)
                         delta = data["choices"][0]["delta"]
-                        # Ignore reasoning_content (internal thinking)
-                        if "reasoning_content" in delta:
-                            continue
+                        # Ignore reasoning_content and apply ThinkFilter
                         if "content" in delta and delta["content"] is not None:
-                            yield delta["content"]
+                            filtered = filter_obj.filter(delta["content"])
+                            if filtered:
+                                yield filtered
                     except Exception:
                         pass
+            flushed = filter_obj.flush()
+            if flushed:
+                yield flushed
     except Exception as e:
         logger.error(f"Error in stream chat response: {e}", exc_info=True)
         raise
@@ -616,7 +666,7 @@ def generate_chat_response_sync(
         messages.append({"role": msg["role"], "content": msg["content"]})
     messages.append({"role": "user", "content": new_message})
     
-    return call_chat_completion(config, messages, response_format_json=False)
+    return call_chat_completion(config, messages, response_format_json=False, disable_reasoning=False)
 
 def detect_language(text: str) -> str:
     """
@@ -844,3 +894,151 @@ def identify_duplicate_categories(category_names: List[str]) -> List[Dict[str, s
     except Exception as e:
         logger.error(f"Error identifying duplicate categories: {e}", exc_info=True)
         return []
+
+def clean_think_block(text: str) -> str:
+    text = re.sub(r'(?s)<think>.*?</think>', '', text)
+    return re.sub(r'(?s)<think>.*$', '', text)
+
+class ThinkFilter:
+    def __init__(self):
+        self.in_think = False
+        self.buf = ""
+
+    def filter(self, chunk: str) -> str:
+        self.buf += chunk
+        output = ""
+        while True:
+            if self.in_think:
+                idx = self.buf.find("</think>")
+                if idx != -1:
+                    self.buf = self.buf[idx + len("</think>"):]
+                    self.in_think = False
+                    continue
+                has_partial = False
+                end_tag = "</think>"
+                for i in range(1, len(end_tag)):
+                    if self.buf.endswith(end_tag[:i]):
+                        has_partial = True
+                        break
+                if has_partial:
+                    for i in range(len(end_tag) - 1, 0, -1):
+                        if self.buf.endswith(end_tag[:i]):
+                            self.buf = end_tag[:i]
+                            break
+                else:
+                    self.buf = ""
+                break
+            else:
+                idx = self.buf.find("<think>")
+                if idx != -1:
+                    output += self.buf[:idx]
+                    self.buf = self.buf[idx + len("<think>"):]
+                    self.in_think = True
+                    continue
+                start_tag = "<think>"
+                partial_idx = -1
+                for i in range(1, len(start_tag)):
+                    if self.buf.endswith(start_tag[:i]):
+                        partial_idx = len(self.buf) - i
+                        break
+                if partial_idx != -1:
+                    output += self.buf[:partial_idx]
+                    self.buf = self.buf[partial_idx:]
+                else:
+                    output += self.buf
+                    self.buf = ""
+                break
+        return output
+
+    def flush(self) -> str:
+        if not self.in_think:
+            res = self.buf
+            self.buf = ""
+            return res
+        return ""
+
+def is_reasoning_model(model: str) -> bool:
+    m = model.lower()
+    return "r1" in m or "qwq" in m or "reasoner" in m or "thinking" in m or "reasoning" in m
+
+def append_reasoning_disabler(req_payload: Dict[str, Any], model: str, base_url: str):
+    m = model.lower()
+    url = base_url.lower()
+    
+    # Gemini
+    if "gemini" in m or "googleapis.com" in url:
+        req_payload["thinking_config"] = {"thinking_budget": 0}
+        
+    # DeepSeek, Kimi, GLM, MiniMax
+    if any(x in m for x in ["deepseek", "kimi", "glm", "minimax"]) or any(x in url for x in ["deepseek", "moonshot", "zhipu"]):
+        req_payload["thinking"] = {"type": "disabled"}
+        
+    # Ollama
+    if "localhost:11434" in url or "127.0.0.1:11434" in url or "ollama" in m:
+        req_payload["think"] = False
+        
+    # vLLM / Llama.cpp / Others
+    if is_reasoning_model(model):
+        req_payload["chat_template_kwargs"] = {"enable_thinking": False}
+        req_payload["enable_thinking"] = False
+        
+        if "thinking_config" not in req_payload:
+            req_payload["thinking_config"] = {"thinking_budget": 0}
+        if "thinking" not in req_payload:
+            req_payload["thinking"] = {"type": "disabled"}
+        if "think" not in req_payload:
+            req_payload["think"] = False
+
+def test_llm_reasoning(api_base_url: str, api_key: str, model: str):
+    import httpx
+    url = f"{api_base_url.rstrip('/')}/chat/completions"
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+        
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "user", "content": "Please respond with exactly one word 'hello' and absolutely nothing else."}
+        ]
+    }
+    
+    append_reasoning_disabler(payload, model, api_base_url)
+    
+    is_retry = False
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            response = client.post(url, headers=headers, json=payload)
+            
+        if response.status_code == 400:
+            # Retry without disablers
+            for field in ["chat_template_kwargs", "thinking", "thinking_config", "think", "enable_thinking"]:
+                payload.pop(field, None)
+            is_retry = True
+            with httpx.Client(timeout=15.0) as client:
+                response = client.post(url, headers=headers, json=payload)
+                
+        if response.status_code != 200:
+            raise Exception(f"API returned status {response.status_code}: {response.text}")
+            
+        result = response.json()
+        if "choices" not in result or len(result["choices"]) == 0:
+            raise Exception("API returned empty choices")
+            
+        choice = result["choices"][0]
+        content = choice["message"].get("content") or ""
+        reasoning_content = choice["message"].get("reasoning_content") or ""
+        
+        reasoning_status = "not_reasoning"
+        has_reasoning = bool(reasoning_content) or "<think>" in content or "</think>" in content
+        is_reasoning_model_name = is_reasoning_model(model)
+        
+        if is_reasoning_model_name or has_reasoning:
+            if is_retry or has_reasoning:
+                reasoning_status = "unable_to_disable"
+            else:
+                reasoning_status = "disabled_successfully"
+                
+        return content, reasoning_status
+    except Exception as e:
+        raise Exception(f"Reasoning test failed: {str(e)}")
