@@ -626,36 +626,19 @@ function initEventListeners() {
             }
         });
     }
-    async function fetchAndPopulateModels(apiBaseUrl, apiKey) {
-        if (!apiBaseUrl) return;
-        const datalist = document.getElementById('setting-ai-model-list');
-        if (!datalist) return;
-        try {
-            const res = await fetch('/settings/get-models', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    ai_base_url: apiBaseUrl,
-                    ai_api_key: apiKey
-                })
-            });
-            const data = await res.json();
-            if (data.success && data.models && data.models.length > 0) {
-                datalist.innerHTML = '';
-                data.models.forEach(model => {
-                    const option = document.createElement('option');
-                    option.value = model;
-                    datalist.appendChild(option);
-                });
-                
-                const modelInput = document.getElementById('setting-ai-model');
-                if (modelInput && !modelInput.value.trim()) {
-                    modelInput.value = data.models[0];
+    const settingAiModelInputElem = document.getElementById('setting-ai-model');
+    if (settingAiModelInputElem) {
+        settingAiModelInputElem.addEventListener('focus', () => {
+            const oldVal = settingAiModelInputElem.value;
+            settingAiModelInputElem.value = '';
+            const restoreOldVal = () => {
+                if (!settingAiModelInputElem.value.trim()) {
+                    settingAiModelInputElem.value = oldVal;
                 }
-            }
-        } catch (err) {
-            console.error('Failed to pre-fetch models:', err);
-        }
+                settingAiModelInputElem.removeEventListener('blur', restoreOldVal);
+            };
+            settingAiModelInputElem.addEventListener('blur', restoreOldVal);
+        });
     }
 
     const settingAiUrlInput = document.getElementById('setting-ai-url');
@@ -3886,6 +3869,38 @@ function switchManageModalTab(tab) {
         elements.tabContentSettings.classList.remove('hidden');
         
         elements.settingsSaveBtn.classList.remove('hidden');
+    }
+}
+
+async function fetchAndPopulateModels(apiBaseUrl, apiKey) {
+    if (!apiBaseUrl) return;
+    const datalist = document.getElementById('setting-ai-model-list');
+    if (!datalist) return;
+    try {
+        const res = await fetch('/settings/get-models', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ai_base_url: apiBaseUrl,
+                ai_api_key: apiKey
+            })
+        });
+        const data = await res.json();
+        if (data.success && data.models && data.models.length > 0) {
+            datalist.innerHTML = '';
+            data.models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model;
+                datalist.appendChild(option);
+            });
+            
+            const modelInput = document.getElementById('setting-ai-model');
+            if (modelInput && !modelInput.value.trim()) {
+                modelInput.value = data.models[0];
+            }
+        }
+    } catch (err) {
+        console.error('Failed to pre-fetch models:', err);
     }
 }
 
