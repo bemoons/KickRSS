@@ -72,6 +72,9 @@ def generate_stream_summary(entry_id: int, title: str, url: str, ft_text: str, d
                         buffer = ""
                     else:
                         buffer = rest
+                is_clickbait_prefix = "CLICKBAIT_NOTE:".startswith(buffer) or buffer.startswith("CLICKBAIT_NOTE:")
+                if is_clickbait_prefix:
+                    pass
                 elif len(buffer) >= 30:
                     in_summary = True
                     yield f"data: {json.dumps({'summary': buffer, 'clickbait_note': None, 'status': 'streaming'}, ensure_ascii=False)}\n\n"
@@ -328,9 +331,12 @@ def generate_stream_chat(entry_id: int, title: str, fulltext: Optional[str], sum
             title, fulltext, summary, chat_history, new_message
         )
         accumulated_reply = ""
-        for chunk in ai_stream:
-            yield f"data: {json.dumps({'reply': chunk, 'status': 'streaming'}, ensure_ascii=False)}\n\n"
-            accumulated_reply += chunk
+        for chunk, is_reasoning in ai_stream:
+            if is_reasoning:
+                yield f"data: {json.dumps({'reply': chunk, 'status': 'thinking'}, ensure_ascii=False)}\n\n"
+            else:
+                yield f"data: {json.dumps({'reply': chunk, 'status': 'streaming'}, ensure_ascii=False)}\n\n"
+                accumulated_reply += chunk
             
         final_reply = accumulated_reply.strip()
         if final_reply:

@@ -68,7 +68,7 @@ def test_right_column_chat(client):
             assert hist[1]["role"] == "assistant"
 
     # 2. Test Stream Chat
-    mock_stream_chunks = ["This ", "is ", "the ", "streaming ", "assistant ", "reply."]
+    mock_stream_chunks = [("This ", False), ("is ", False), ("the ", False), ("streaming ", False), ("assistant ", False), ("reply.", False)]
     with patch("ai.generate_chat_response_stream", return_value=iter(mock_stream_chunks)) as mock_chat_stream:
         response = client.post(
             f"/entries/{entry_id}/chat?stream=true", 

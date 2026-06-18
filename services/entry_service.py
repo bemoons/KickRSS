@@ -30,6 +30,10 @@ def get_entry_fulltext(entry_id: int) -> Dict[str, Any]:
         fetcher = "feed"
     else:
         content, status, fetcher = extractor.fetch_and_extract_fulltext(entry["url"])
+        if status == "fetch_failed" and (entry["raw_content"] or "").strip():
+            content = crud.clean_html(entry["raw_content"] or "")
+            status = "ok"
+            fetcher = "feed"
         
     with db.get_db() as conn:
         crud.save_fulltext(conn, entry_id, content, status, fetcher)

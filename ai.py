@@ -623,16 +623,26 @@ def generate_chat_response_stream(
                     try:
                         data = json.loads(data_str)
                         delta = data["choices"][0]["delta"]
-                        # Ignore reasoning_content and apply ThinkFilter
+                        
+                        # Handle reasoning_content first if present
+                        if "reasoning_content" in delta and delta["reasoning_content"]:
+                            yield delta["reasoning_content"], True
+                            continue
+                            
                         if "content" in delta and delta["content"] is not None:
-                            filtered = filter_obj.filter(delta["content"])
-                            if filtered:
-                                yield filtered
+                            clean_content, reasoning_content = filter_obj.filter_ex(delta["content"])
+                            if reasoning_content:
+                                yield reasoning_content, True
+                            if clean_content:
+                                yield clean_content, False
                     except Exception:
                         pass
             flushed = filter_obj.flush()
             if flushed:
-                yield flushed
+                if filter_obj.in_think:
+                    yield flushed, True
+                else:
+                    yield flushed, False
     except Exception as e:
         logger.error(f"Error in stream chat response: {e}", exc_info=True)
         raise
@@ -905,12 +915,18 @@ class ThinkFilter:
         self.buf = ""
 
     def filter(self, chunk: str) -> str:
+        clean, _ = self.filter_ex(chunk)
+        return clean
+
+    def filter_ex(self, chunk: str) -> tuple[str, str]:
         self.buf += chunk
         output = ""
+        reasoning = ""
         while True:
             if self.in_think:
                 idx = self.buf.find("</think>")
                 if idx != -1:
+                    reasoning += self.buf[:idx]
                     self.buf = self.buf[idx + len("</think>"):]
                     self.in_think = False
                     continue
@@ -923,9 +939,11 @@ class ThinkFilter:
                 if has_partial:
                     for i in range(len(end_tag) - 1, 0, -1):
                         if self.buf.endswith(end_tag[:i]):
+                            reasoning += self.buf[:len(self.buf) - i]
                             self.buf = end_tag[:i]
                             break
                 else:
+                    reasoning += self.buf
                     self.buf = ""
                 break
             else:
@@ -948,7 +966,7 @@ class ThinkFilter:
                     output += self.buf
                     self.buf = ""
                 break
-        return output
+        return output, reasoning
 
     def flush(self) -> str:
         if not self.in_think:
