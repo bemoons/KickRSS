@@ -629,6 +629,10 @@ def generate_chat_response_stream(
                             yield delta["reasoning_content"], True
                             continue
                             
+                        if "reasoning" in delta and delta["reasoning"]:
+                            yield delta["reasoning"], True
+                            continue
+                            
                         if "content" in delta and delta["content"] is not None:
                             clean_content, reasoning_content = filter_obj.filter_ex(delta["content"])
                             if reasoning_content:

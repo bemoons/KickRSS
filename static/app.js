@@ -2876,6 +2876,12 @@ async function handleChatSubmit(e) {
         let thinkingText = "";
         
         aiBubble.textContent = ""; // clear thinking placeholder
+        aiBubble.innerHTML = `
+            <div class="ai-thinking-section" style="display: none; width: 100%;"></div>
+            <div class="ai-reply-section" style="width: 100%;"></div>
+        `;
+        const thinkingSec = aiBubble.querySelector('.ai-thinking-section');
+        const replySec = aiBubble.querySelector('.ai-reply-section');
         
         while (true) {
             const { value, done } = await reader.read();
@@ -2895,11 +2901,12 @@ async function handleChatSubmit(e) {
                         const data = JSON.parse(dataStr);
                         if (data.status === 'thinking' && data.reply) {
                             thinkingText += data.reply;
+                            thinkingSec.style.display = 'block';
                             let displayText = thinkingText;
                             if (displayText.length > 60) {
                                 displayText = '...' + displayText.slice(-57);
                             }
-                            aiBubble.innerHTML = `
+                            thinkingSec.innerHTML = `
                                 <div class="thinking-box" style="font-size: 11px; color: var(--text-muted); font-style: italic; display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px dashed var(--border-color); max-width: 100%; margin-bottom: 8px;">
                                     <span style="flex-shrink: 0; display: inline-flex; animation: spin 2s linear infinite;">🌀</span>
                                     <span style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1;">思考中: ${escapeHTML(displayText)}</span>
@@ -2907,8 +2914,16 @@ async function handleChatSubmit(e) {
                             `;
                             elements.chatHistory.scrollTop = elements.chatHistory.scrollHeight;
                         } else if (data.status === 'streaming' && data.reply) {
+                            if (thinkingText) {
+                                thinkingSec.innerHTML = `
+                                    <div class="thinking-box completed" style="font-size: 11px; color: var(--text-muted); opacity: 0.8; display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; background: rgba(255,255,255,0.01); border-radius: 6px; border: 1px dotted var(--border-color); margin-bottom: 8px;">
+                                        <span style="color: #10b981;">✅</span>
+                                        <span>已完成思考</span>
+                                    </div>
+                                `;
+                            }
                             fullReplyText += data.reply;
-                            aiBubble.innerHTML = formatChatReply(fullReplyText);
+                            replySec.innerHTML = formatChatReply(fullReplyText);
                             // Scroll chat history to bottom
                             elements.chatHistory.scrollTop = elements.chatHistory.scrollHeight;
                         } else if (data.status === 'done') {
