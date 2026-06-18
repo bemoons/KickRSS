@@ -334,25 +334,54 @@ def get_summary_messages(
         "it": ("Italian (Italiano)", "Italiano", "意大利语")
     }
     
+    is_chinese = (summary_lang in ["zh", "zh-hant"])
     if summary_lang in lang_map:
         eng_name, local_name, chn_name = lang_map[summary_lang]
-        lang_rule = (
-            f"CRITICAL: The summary must be written in {eng_name} ({local_name}) ONLY, regardless of the original language of the article.\n"
-            f"- If the article is in Chinese or English, you MUST translate the key concepts and write the summary in {eng_name} ({local_name}).\n"
-            f"- 必须且只能使用 {chn_name} ({local_name}) 撰写 SUMMARY 部分，绝对不要使用原文语言（如中文或英文）来写摘要。"
-        )
-        if is_numeric_length:
-            lang_rule += (
-                f"\n- 必须写满大约 {target_chars} 个{chn_name}（汉字）（字数范围必须严格控制在 {int(target_chars * 0.9)} 到 {int(target_chars * 1.15)} 字之间）。\n"
-                f"- 这是字数的硬性指令，请把观点铺开、细节写饱满，绝对不能偷懒缩短！\n"
-                f"- 编写要求：{cn_structure_advice}"
+        if is_chinese:
+            lang_rule = (
+                f"CRITICAL: The summary must be written in {eng_name} ({local_name}) ONLY, regardless of the original language of the article.\n"
+                f"- 必须且只能使用 {chn_name} ({local_name}) 撰写 SUMMARY 部分，绝对不要使用原文语言来写摘要。"
             )
-        reminder = f"\n\nReminder: You MUST write the SUMMARY in {eng_name} ({local_name}). (提示：请务必且只能使用 {chn_name} / {local_name} 撰写摘要。)"
+            if is_numeric_length:
+                lang_rule += (
+                    f"\n- 必须写满大约 {target_chars} 个汉字（字数范围必须严格控制在 {int(target_chars * 0.9)} 到 {int(target_chars * 1.15)} 字之间）。\n"
+                    f"- 这是字数的硬性指令，请把观点铺开、细节写饱满，绝对不能偷懒缩短！\n"
+                    f"- 编写要求：{cn_structure_advice}"
+                )
+            reminder = f"\n\nReminder: You MUST write the SUMMARY in {eng_name} ({local_name}). (提示：请务必且只能使用 {chn_name} / {local_name} 撰写摘要。)"
+        else:
+            lang_rule = (
+                f"CRITICAL: The summary must be written in {eng_name} ({local_name}) ONLY, regardless of the original language of the article.\n"
+                f"- You MUST write the SUMMARY portion in {eng_name} ({local_name}) ONLY. Do NOT write the summary in the original language if it is different. You MUST translate and write it in {eng_name}."
+            )
+            if is_numeric_length:
+                lang_rule += (
+                    f"\n- The summary MUST target approximately {target_chars} characters in {eng_name}.\n"
+                    f"- Provide details and explain arguments fully to satisfy the length requirement.\n"
+                    f"- Requirements: {structure_advice}"
+                )
+            reminder = f"\n\nReminder: You MUST write the SUMMARY in {eng_name} ({local_name}) ONLY."
     else:
         lang_rule = "The summary must be in the same language as the article content."
         if is_numeric_length:
             lang_rule += f"\n- CRITICAL: The generated summary MUST target approximately {target_chars} characters. DO NOT make it too short.\n- Requirements: {structure_advice}"
         reminder = ""
+
+    formatting_guidelines = (
+        "- Formatting Guidelines (Extremely Important):\n"
+        "  - Use markdown formatting to make the summary highly readable.\n"
+        "  - Structure the summary primarily as a detailed bullet list starting with '-' (e.g., `- **Point Name**: Explanation`). Each bullet point should be highly informative, specific, and detailed.\n"
+        "  - You may introduce the summary with a very brief opening paragraph (1-2 sentences), but the core of the summary must be structured as detailed list items rather than plain paragraphs.\n"
+        "  - Selectively use double asterisks (`**text**`) to bold key conclusions, core arguments, or sentences that need focus to make the summary scannable."
+    )
+    if is_chinese:
+        formatting_guidelines += (
+            "\n- 格式与排版规范（极重要）：\n"
+            "  - 必须使用 Markdown 格式排版，确保摘要易读、易扫视。\n"
+            "  - 主要排版结构：必须以条目（无序列表 `- `）为核心排版结构，避免使用大段的文字叙述。每一个条目（例如：`- **核心要点**：详细细节与事实展开`）必须内容扎实、数据细节饱满，并合理换行展开。\n"
+            "  - 可以在最开头有一句非常简短的导语（1-2句），但整个摘要的主体必须是详细具体的条目列表。\n"
+            "  - 突出重点：选择性地将最重要的结论、核心词句或关键数据加粗（使用 `**加粗文本**`），让读者能一眼扫视出文章的精髓，但注意不要过度加粗。"
+        )
 
     system_prompt = (
         "You are an expert RSS assistant. You are given the title, URL, and full-text content of an article.\n"
@@ -364,16 +393,7 @@ def get_summary_messages(
         f"- {rule_desc}\n"
         "- If the content is empty or contains no text, reply exactly with: \"NO_CONTENT\"\n"
         f"- {lang_rule}\n"
-        "- Formatting Guidelines (Extremely Important):\n"
-        "  - Use markdown formatting to make the summary highly readable.\n"
-        "  - Structure the summary primarily as a detailed bullet list starting with '-' (e.g., `- **Point Name**: Explanation`). Each bullet point should be highly informative, specific, and detailed.\n"
-        "  - You may introduce the summary with a very brief opening paragraph (1-2 sentences), but the core of the summary must be structured as detailed list items rather than plain paragraphs.\n"
-        "  - Selectively use double asterisks (`**text**`) to bold key conclusions, core arguments, or sentences that need focus to make the summary scannable.\n"
-        "- 格式与排版规范（极重要）：\n"
-        "  - 必须使用 Markdown 格式排版，确保摘要易读、易扫视。\n"
-        "  - 主要排版结构：必须以条目（无序列表 `- `）为核心排版结构，避免使用大段的文字叙述。每一个条目（例如：`- **核心要点**：详细细节与事实展开`）必须内容扎实、数据细节饱满，并合理换行展开。\n"
-        "  - 可以在最开头有一句非常简短的导语（1-2句），但整个摘要的主体必须是详细具体的条目列表。\n"
-        "  - 突出重点：选择性地将最重要的结论、核心词句或关键数据加粗（使用 `**加粗文本**`），让读者能一眼扫视出文章的精髓，但注意不要过度加粗。\n"
+        f"{formatting_guidelines}\n"
         "- Format your response EXACTLY like this (do NOT translate the prefix keys 'CLICKBAIT_NOTE:' and 'SUMMARY:'):\n"
         "CLICKBAIT_NOTE: <If the title is misleading, state the exact reason and clear up the discrepancy in 1 sentence. If NOT misleading, write NONE>\n"
         "SUMMARY: <write the detailed summary here>"
@@ -787,8 +807,10 @@ def generate_translation(title: str, text: str, target_lang: str) -> str:
         "- Keep the paragraph structure and line breaks EXACTLY identical to the source text.\n"
         "- Do NOT add any notes, explanations, introduction, or prefix. Output ONLY the translated paragraphs.\n"
         f"- Translate to {eng_name} ({local_name}) faithfully, maintaining the original tone and style.\n"
+        "- Do NOT output any thinking process, reasoning, or <think> tags. Output ONLY the final translation.\n"
         f"- CRITICAL: Regardless of the source language, you must translate it into {eng_name} ({local_name}). "
-        f"Do NOT copy or output the original text if it is in a different language. You MUST output the translation in {local_name}.\n"
+        "Do NOT copy or output the original text if it is in a different language. You MUST output the translation in {local_name}.\n"
+        "- 绝对不要输出任何思考过程、推理内容或 <think> 标签！只能输出最终的翻译文本。\n"
         f"- 必须且只能将文本翻译为 {chn_name} ({local_name})，绝对不要直接输出原文！请输出完整的翻译后文本。"
     )
     
