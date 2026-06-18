@@ -959,7 +959,7 @@ class ThinkFilter:
 
 def is_reasoning_model(model: str) -> bool:
     m = model.lower()
-    return "r1" in m or "qwq" in m or "reasoner" in m or "thinking" in m or "reasoning" in m
+    return "r1" in m or "qwq" in m or "reasoner" in m or "thinking" in m or "reasoning" in m or "qwen" in m or "3.6" in m or "3.5" in m or "a3b" in m
 
 def append_reasoning_disabler(req_payload: Dict[str, Any], model: str, base_url: str):
     m = model.lower()
@@ -968,26 +968,22 @@ def append_reasoning_disabler(req_payload: Dict[str, Any], model: str, base_url:
     # Gemini
     if "gemini" in m or "googleapis.com" in url:
         req_payload["thinking_config"] = {"thinking_budget": 0}
+        return
         
     # DeepSeek, Kimi, GLM, MiniMax
     if any(x in m for x in ["deepseek", "kimi", "glm", "minimax"]) or any(x in url for x in ["deepseek", "moonshot", "zhipu"]):
         req_payload["thinking"] = {"type": "disabled"}
+        return
         
     # Ollama
     if "localhost:11434" in url or "127.0.0.1:11434" in url or "ollama" in m:
         req_payload["think"] = False
+        return
         
-    # vLLM / Llama.cpp / Others
+    # vLLM / Llama.cpp / Qwen / Others
     if is_reasoning_model(model):
         req_payload["chat_template_kwargs"] = {"enable_thinking": False}
         req_payload["enable_thinking"] = False
-        
-        if "thinking_config" not in req_payload:
-            req_payload["thinking_config"] = {"thinking_budget": 0}
-        if "thinking" not in req_payload:
-            req_payload["thinking"] = {"type": "disabled"}
-        if "think" not in req_payload:
-            req_payload["think"] = False
 
 def test_llm_reasoning(api_base_url: str, api_key: str, model: str):
     import httpx
