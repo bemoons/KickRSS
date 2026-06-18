@@ -267,6 +267,10 @@ def get_summary_messages(
         length = settings.summary_length
     if not summary_lang:
         summary_lang = settings.summary_language
+    if summary_lang == "auto" or not summary_lang:
+        summary_lang = detect_language(content)
+    if not summary_lang:
+        summary_lang = "zh"
         
     is_numeric_length = False
     try:
