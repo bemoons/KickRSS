@@ -6010,16 +6010,16 @@ function updateUILanguage(lang) {
     const optAuto = document.querySelector('#setting-ai-summary-lang option[value="auto"]');
     if (optAuto) {
         const autoText = {
-            'zh': '跟随原文 (Auto)',
-            'zh-hant': '跟隨原文 (Auto)',
-            'en': 'Follow Original (Auto)',
-            'ja': '原文に従う (Auto)',
-            'ko': '원본 문서 언어 (Auto)',
-            'fr': 'Suivre l\'original (Auto)',
-            'es': 'Seguir original (Auto)',
-            'de': 'Original folgen (Auto)'
+            'zh': '跟随系统语言 (Auto)',
+            'zh-hant': '跟隨系統語言 (Auto)',
+            'en': 'Follow System Language (Auto)',
+            'ja': 'システム言語に従う (Auto)',
+            'ko': '시스템 언어 따름 (Auto)',
+            'fr': 'Suivre la langue du système (Auto)',
+            'es': 'Seguir idioma del sistema (Auto)',
+            'de': 'Systemsprache folgen (Auto)'
         };
-        optAuto.textContent = autoText[lang] || '跟随原文 (Auto)';
+        optAuto.textContent = autoText[lang] || '跟随系统语言 (Auto)';
     }
 }
 
