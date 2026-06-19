@@ -608,6 +608,11 @@ def generate_chat_response_stream(
     config = settings.get_ai_config("chat")
     lang_rule = get_chat_language_rule()
     
+    use_reasoning = config.get("use_reasoning", True)
+    reasoning_rule = ""
+    if not use_reasoning:
+        reasoning_rule = "\n\n【极其重要】请直接输出最终的解答，绝对不要包含任何思考过程、推理内容或 <think> 标签。"
+    
     system_prompt = (
         "You are a helpful assistant integrated into an RSS reader.\n"
         "You are helping the user discuss a specific article.\n"
@@ -617,6 +622,7 @@ def generate_chat_response_stream(
         f"Article Fulltext:\n{fulltext or 'Not available'}\n\n"
         "Discuss this article with the user in a helpful, concise way. Do not output markdown code blocks unless necessary. "
         f"{lang_rule}"
+        f"{reasoning_rule}"
     )
     
     messages = [{"role": "system", "content": system_prompt}]
@@ -706,6 +712,11 @@ def generate_chat_response_sync(
     config = settings.get_ai_config("chat")
     lang_rule = get_chat_language_rule()
     
+    use_reasoning = config.get("use_reasoning", True)
+    reasoning_rule = ""
+    if not use_reasoning:
+        reasoning_rule = "\n\n【极其重要】请直接输出最终的解答，绝对不要包含任何思考过程、推理内容或 <think> 标签。"
+    
     system_prompt = (
         "You are a helpful assistant integrated into an RSS reader.\n"
         "You are helping the user discuss a specific article.\n"
@@ -715,6 +726,7 @@ def generate_chat_response_sync(
         f"Article Fulltext:\n{fulltext or 'Not available'}\n\n"
         "Discuss this article with the user in a helpful, concise way. Do not output markdown code blocks unless necessary. "
         f"{lang_rule}"
+        f"{reasoning_rule}"
     )
     
     messages = [{"role": "system", "content": system_prompt}]
