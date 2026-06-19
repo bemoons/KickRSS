@@ -191,6 +191,7 @@ const elements = {
     settingChatKey: document.getElementById('setting-chat-key'),
     settingChatModel: document.getElementById('setting-chat-model'),
     settingChatTokens: document.getElementById('setting-chat-tokens'),
+    settingChatUseReasoning: document.getElementById('setting-chat-use-reasoning'),
     settingAiSummaryLang: document.getElementById('setting-ai-summary-lang'),
     settingSystemLang: document.getElementById('setting-system-lang'),
     
@@ -563,6 +564,13 @@ function initEventListeners() {
     }
     if (elements.settingsSaveBtn) {
         elements.settingsSaveBtn.addEventListener('click', saveSystemSettings);
+    }
+    if (elements.settingChatUseReasoning) {
+        elements.settingChatUseReasoning.addEventListener('change', (e) => {
+            if (elements.settingChatTokens) {
+                elements.settingChatTokens.value = e.target.checked ? '8192' : '1200';
+            }
+        });
     }
     if (elements.settingEnableAuth) {
         elements.settingEnableAuth.addEventListener('change', (e) => {
@@ -3989,7 +3997,12 @@ async function loadAndRenderSystemSettings() {
         if (elements.settingChatUrl) elements.settingChatUrl.value = settingsData.chat_base_url;
         if (elements.settingChatKey) elements.settingChatKey.value = settingsData.chat_api_key || '';
         if (elements.settingChatModel) elements.settingChatModel.value = settingsData.chat_model;
-        if (elements.settingChatTokens) elements.settingChatTokens.value = settingsData.chat_max_tokens || '';
+        if (elements.settingChatTokens) {
+            elements.settingChatTokens.value = settingsData.chat_max_tokens || '';
+            if (elements.settingChatUseReasoning) {
+                elements.settingChatUseReasoning.checked = (settingsData.chat_max_tokens >= 4000);
+            }
+        }
         if (elements.settingInterestProfileEnabled) {
             elements.settingInterestProfileEnabled.checked = settingsData.interest_profile_enabled === true;
         }
