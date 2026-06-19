@@ -297,6 +297,7 @@ async function loadSettingsOnStartup() {
             state.autoSummary = data.ai_auto_summary !== false; // default true
             state.systemLang = data.system_lang || 'zh';
             state.interestProfileEnabled = data.interest_profile_enabled === true;
+            state.chatUseReasoning = data.chat_use_reasoning !== false;
             updateUILanguage(state.systemLang);
         }
     } catch (e) {
@@ -304,6 +305,7 @@ async function loadSettingsOnStartup() {
         state.autoSummary = true;
         state.systemLang = 'zh';
         state.interestProfileEnabled = false;
+        state.chatUseReasoning = true;
     }
 }
 
@@ -2863,7 +2865,9 @@ async function handleChatSubmit(e) {
     appendChatBubble('user', messageText);
     
     // Render assistant placeholder bubble
-    const aiBubble = appendChatBubble('assistant', '正在思考...');
+    const useReasoning = state.chatUseReasoning !== false;
+    const placeholderText = useReasoning ? '正在思考...' : '正在生成回复...';
+    const aiBubble = appendChatBubble('assistant', placeholderText);
     
     const entryId = state.currentOpenEntry.id;
     
@@ -3999,9 +4003,9 @@ async function loadAndRenderSystemSettings() {
         if (elements.settingChatModel) elements.settingChatModel.value = settingsData.chat_model;
         if (elements.settingChatTokens) {
             elements.settingChatTokens.value = settingsData.chat_max_tokens || '';
-            if (elements.settingChatUseReasoning) {
-                elements.settingChatUseReasoning.checked = (settingsData.chat_max_tokens >= 4000);
-            }
+        }
+        if (elements.settingChatUseReasoning) {
+            elements.settingChatUseReasoning.checked = settingsData.chat_use_reasoning !== false;
         }
         if (elements.settingInterestProfileEnabled) {
             elements.settingInterestProfileEnabled.checked = settingsData.interest_profile_enabled === true;
@@ -4105,6 +4109,7 @@ async function saveSystemSettings(e) {
         chat_api_key: elements.settingChatKey ? elements.settingChatKey.value.trim() : "",
         chat_model: elements.settingChatModel ? elements.settingChatModel.value.trim() : "",
         chat_max_tokens: (elements.settingChatTokens && elements.settingChatTokens.value) ? parseInt(elements.settingChatTokens.value) : null,
+        chat_use_reasoning: elements.settingChatUseReasoning ? elements.settingChatUseReasoning.checked : false,
         interest_profile_enabled: elements.settingInterestProfileEnabled ? elements.settingInterestProfileEnabled.checked : false,
         access_password: targetPassword
     };
@@ -4123,6 +4128,7 @@ async function saveSystemSettings(e) {
             state.autoSummary = payload.ai_auto_summary;
             state.systemLang = payload.system_lang;
             state.interestProfileEnabled = payload.interest_profile_enabled;
+            state.chatUseReasoning = payload.chat_use_reasoning;
             updateUILanguage(state.systemLang);
             alert((TRANSLATIONS[lang] && TRANSLATIONS[lang]["save_success"]) || "系统设置参数保存成功！");
             hideAllModals();
