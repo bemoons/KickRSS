@@ -118,7 +118,8 @@ class Settings:
             "max_concurrency": task_cfg.get("max_concurrency", 2) if task_name == "classify" else None,
             "max_tokens": max_tokens,
             "pregenerate": ai_cfg.get("pregenerate", False),
-            "stream": ai_cfg.get("stream", True)
+            "stream": ai_cfg.get("stream", True),
+            "use_reasoning": task_cfg.get("use_reasoning") if task_cfg.get("use_reasoning") is not None else True
         }
 
     def save(self):

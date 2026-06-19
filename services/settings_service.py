@@ -32,6 +32,7 @@ def get_settings() -> Dict[str, Any]:
         "chat_api_key": chat_cfg.get("api_key") or "",
         "chat_model": chat_cfg.get("model") or "",
         "chat_max_tokens": chat_cfg.get("max_tokens") or 1200,
+        "chat_use_reasoning": chat_cfg.get("use_reasoning") if chat_cfg.get("use_reasoning") is not None else True,
         "access_password": settings.data.get("access_password", "")
     }
 
@@ -52,6 +53,7 @@ def update_settings(
     chat_api_key: Optional[str] = None,
     chat_model: Optional[str] = None,
     chat_max_tokens: Optional[int] = None,
+    chat_use_reasoning: Optional[bool] = None,
     interest_profile_enabled: Optional[bool] = None,
     access_password: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -119,6 +121,9 @@ def update_settings(
         
     if chat_max_tokens is not None:
         settings.data["ai"]["tasks"]["chat"]["max_tokens"] = chat_max_tokens
+        
+    if chat_use_reasoning is not None:
+        settings.data["ai"]["tasks"]["chat"]["use_reasoning"] = chat_use_reasoning
         
     if interest_profile_enabled is not None:
         settings.data["interest_profile_enabled"] = interest_profile_enabled

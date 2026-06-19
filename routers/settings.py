@@ -22,6 +22,7 @@ class SettingsUpdate(BaseModel):
     chat_api_key: Optional[str] = None
     chat_model: Optional[str] = None
     chat_max_tokens: Optional[int] = None
+    chat_use_reasoning: Optional[bool] = None
     ai_summary_lang: Optional[str] = None
     system_lang: Optional[str] = None
     interest_profile_enabled: Optional[bool] = None
@@ -50,6 +51,7 @@ def update_settings(update: SettingsUpdate):
         chat_api_key=update.chat_api_key,
         chat_model=update.chat_model,
         chat_max_tokens=update.chat_max_tokens,
+        chat_use_reasoning=update.chat_use_reasoning,
         interest_profile_enabled=update.interest_profile_enabled,
         access_password=update.access_password
     )

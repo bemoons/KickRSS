@@ -636,10 +636,14 @@ def generate_chat_response_stream(
         "messages": messages,
         "stream": True
     }
-    if is_reasoning_model(config["model"]):
+    use_reasoning = config.get("use_reasoning", True)
+    if is_reasoning_model(config["model"]) and use_reasoning:
         payload["max_tokens"] = 8192
     elif config.get("max_tokens"):
         payload["max_tokens"] = config["max_tokens"]
+        
+    if not use_reasoning:
+        append_reasoning_disabler(payload, config["model"], config["base_url"])
         
     try:
         filter_obj = ThinkFilter()
@@ -654,28 +658,36 @@ def generate_chat_response_stream(
                         data = json.loads(data_str)
                         delta = data["choices"][0]["delta"]
                         
-                        # Handle reasoning_content first if present
-                        if "reasoning_content" in delta and delta["reasoning_content"]:
-                            yield delta["reasoning_content"], True
-                            continue
-                            
-                        if "reasoning" in delta and delta["reasoning"]:
-                            yield delta["reasoning"], True
-                            continue
-                            
-                        if "content" in delta and delta["content"] is not None:
-                            clean_content, reasoning_content = filter_obj.filter_ex(delta["content"])
-                            if reasoning_content:
-                                yield reasoning_content, True
-                            if clean_content:
-                                yield clean_content, False
+                        if not use_reasoning:
+                            if ("reasoning_content" in delta and delta["reasoning_content"]) or ("reasoning" in delta and delta["reasoning"]):
+                                continue
+                            if "content" in delta and delta["content"] is not None:
+                                clean_content = filter_obj.filter(delta["content"])
+                                if clean_content:
+                                    yield clean_content, False
+                        else:
+                            # Handle reasoning_content first if present
+                            if "reasoning_content" in delta and delta["reasoning_content"]:
+                                yield delta["reasoning_content"], True
+                                continue
+                                
+                            if "reasoning" in delta and delta["reasoning"]:
+                                yield delta["reasoning"], True
+                                continue
+                                
+                            if "content" in delta and delta["content"] is not None:
+                                clean_content, reasoning_content = filter_obj.filter_ex(delta["content"])
+                                if reasoning_content:
+                                    yield reasoning_content, True
+                                if clean_content:
+                                    yield clean_content, False
                     except Exception:
                         pass
             flushed = filter_obj.flush()
             if flushed:
-                if filter_obj.in_think:
+                if use_reasoning and filter_obj.in_think:
                     yield flushed, True
-                else:
+                elif not filter_obj.in_think:
                     yield flushed, False
     except Exception as e:
         logger.error(f"Error in stream chat response: {e}", exc_info=True)
@@ -710,7 +722,8 @@ def generate_chat_response_sync(
         messages.append({"role": msg["role"], "content": msg["content"]})
     messages.append({"role": "user", "content": new_message})
     
-    return call_chat_completion(config, messages, response_format_json=False, disable_reasoning=False)
+    use_reasoning = config.get("use_reasoning", True)
+    return call_chat_completion(config, messages, response_format_json=False, disable_reasoning=not use_reasoning)
 
 def detect_language(text: str) -> str:
     """
