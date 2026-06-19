@@ -44,7 +44,9 @@ def call_chat_completion(
         "messages": messages,
     }
     
-    if config.get("max_tokens"):
+    if is_reasoning_model(config["model"]):
+        payload["max_tokens"] = 8192
+    elif config.get("max_tokens"):
         payload["max_tokens"] = config["max_tokens"]
         
     if response_format_json:
@@ -456,7 +458,9 @@ def generate_summary_stream(
         "messages": messages,
         "stream": True
     }
-    if config.get("max_tokens"):
+    if is_reasoning_model(config["model"]):
+        payload["max_tokens"] = 8192
+    elif config.get("max_tokens"):
         payload["max_tokens"] = config["max_tokens"]
 
     append_reasoning_disabler(payload, config["model"], config["base_url"])
@@ -632,7 +636,9 @@ def generate_chat_response_stream(
         "messages": messages,
         "stream": True
     }
-    if config.get("max_tokens"):
+    if is_reasoning_model(config["model"]):
+        payload["max_tokens"] = 8192
+    elif config.get("max_tokens"):
         payload["max_tokens"] = config["max_tokens"]
         
     try:
