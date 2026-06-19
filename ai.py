@@ -609,9 +609,6 @@ def generate_chat_response_stream(
     lang_rule = get_chat_language_rule()
     
     use_reasoning = config.get("use_reasoning", True)
-    reasoning_rule = ""
-    if not use_reasoning:
-        reasoning_rule = "\n\n【极其重要】请直接输出最终的解答，绝对不要包含任何思考过程、推理内容或 <think> 标签。"
     
     system_prompt = (
         "You are a helpful assistant integrated into an RSS reader.\n"
@@ -622,7 +619,6 @@ def generate_chat_response_stream(
         f"Article Fulltext:\n{fulltext or 'Not available'}\n\n"
         "Discuss this article with the user in a helpful, concise way. Do not output markdown code blocks unless necessary. "
         f"{lang_rule}"
-        f"{reasoning_rule}"
     )
     
     messages = [{"role": "system", "content": system_prompt}]
@@ -642,7 +638,6 @@ def generate_chat_response_stream(
         "messages": messages,
         "stream": True
     }
-    use_reasoning = config.get("use_reasoning", True)
     if is_reasoning_model(config["model"]) and use_reasoning:
         payload["max_tokens"] = 8192
     elif config.get("max_tokens"):
@@ -713,9 +708,6 @@ def generate_chat_response_sync(
     lang_rule = get_chat_language_rule()
     
     use_reasoning = config.get("use_reasoning", True)
-    reasoning_rule = ""
-    if not use_reasoning:
-        reasoning_rule = "\n\n【极其重要】请直接输出最终的解答，绝对不要包含任何思考过程、推理内容或 <think> 标签。"
     
     system_prompt = (
         "You are a helpful assistant integrated into an RSS reader.\n"
@@ -726,7 +718,6 @@ def generate_chat_response_sync(
         f"Article Fulltext:\n{fulltext or 'Not available'}\n\n"
         "Discuss this article with the user in a helpful, concise way. Do not output markdown code blocks unless necessary. "
         f"{lang_rule}"
-        f"{reasoning_rule}"
     )
     
     messages = [{"role": "system", "content": system_prompt}]
@@ -734,7 +725,6 @@ def generate_chat_response_sync(
         messages.append({"role": msg["role"], "content": msg["content"]})
     messages.append({"role": "user", "content": new_message})
     
-    use_reasoning = config.get("use_reasoning", True)
     return call_chat_completion(config, messages, response_format_json=False, disable_reasoning=not use_reasoning)
 
 def detect_language(text: str) -> str:
