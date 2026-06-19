@@ -941,9 +941,12 @@ def chat_with_entry(entry_id: int, req: ChatRequest, stream: Optional[bool] = No
                     entry["title"], fulltext, summary, chat_history, new_message
                 )
                 accumulated_reply = ""
-                for chunk in ai_stream:
-                    yield f"data: {json.dumps({'reply': chunk, 'status': 'streaming'}, ensure_ascii=False)}\n\n"
-                    accumulated_reply += chunk
+                for chunk, is_reasoning in ai_stream:
+                    if is_reasoning:
+                        yield f"data: {json.dumps({'reply': chunk, 'status': 'thinking'}, ensure_ascii=False)}\n\n"
+                    else:
+                        yield f"data: {json.dumps({'reply': chunk, 'status': 'streaming'}, ensure_ascii=False)}\n\n"
+                        accumulated_reply += chunk
                     
                 # Save assistant response to DB
                 final_reply = accumulated_reply.strip()

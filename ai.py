@@ -219,6 +219,10 @@ def get_summary_messages(
         length = settings.summary_length
     if not summary_lang:
         summary_lang = settings.summary_language
+    if summary_lang == "auto" or not summary_lang:
+        summary_lang = settings.system_language
+    if summary_lang == "auto" or not summary_lang:
+        summary_lang = "zh"
         
     is_numeric_length = False
     try:
@@ -436,6 +440,11 @@ def get_chat_language_rule() -> str:
         "it": ("Italian (Italiano)", "意大利语")
     }
     target_lang = settings.summary_language
+    if target_lang == "auto" or not target_lang:
+        target_lang = settings.system_language
+    if not target_lang:
+        target_lang = "zh"
+        
     if target_lang in lang_map:
         eng_name, chn_name = lang_map[target_lang]
         return (
