@@ -113,6 +113,7 @@ const elements = {
     attnBtnGlance: document.getElementById('attn-btn-glance'),
     attnBtnSkim: document.getElementById('attn-btn-skim'),
     attnBtnRead: document.getElementById('attn-btn-read'),
+    videoPlayerContainer: document.getElementById('video-player-container'),
     
     // AI Elements
     aiSummaryBlock: document.getElementById('ai-summary-block'),
@@ -1892,14 +1893,19 @@ async function selectEntry(entryId) {
     });
     
     let entry = state.entries.find(e => e.id === entryId);
-    if (!entry) {
+    if (!entry || entry.raw_content === undefined) {
         try {
             const response = await fetch(`/entries/${entryId}`);
             if (!response.ok) {
                 console.error(`Failed to fetch entry details for id: ${entryId}`);
                 return;
             }
-            entry = await response.json();
+            const fullEntry = await response.json();
+            if (entry) {
+                Object.assign(entry, fullEntry);
+            } else {
+                entry = fullEntry;
+            }
         } catch (err) {
             console.error("Error fetching entry details:", err);
             return;
@@ -2547,6 +2553,18 @@ async function loadArticleDetails(entry) {
     state.isTranslating = false;
     state.translatedContentCache = null;
     
+    // Reset & handle Video Player
+    if (elements.videoPlayerContainer) {
+        elements.videoPlayerContainer.innerHTML = '';
+        elements.videoPlayerContainer.classList.add('hidden');
+        
+        const videoHtml = getVideoPlayerHtml(entry.url, entry.raw_content);
+        if (videoHtml) {
+            elements.videoPlayerContainer.innerHTML = videoHtml;
+            elements.videoPlayerContainer.classList.remove('hidden');
+        }
+    }
+    
     // Reset translation button text to default
     if (elements.artTranslateBtn) {
         const btnText = elements.artTranslateBtn.querySelector('.btn-text');
@@ -3163,6 +3181,107 @@ function escapeHTML(str) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
+}
+
+function extractVideoFromHtml(html) {
+    if (!html) return null;
+    try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        
+        // Find iframes
+        const iframes = doc.querySelectorAll('iframe');
+        for (const iframe of iframes) {
+            const src = iframe.getAttribute('src') || '';
+            if (src.includes('youtube.com/') || 
+                src.includes('youtu.be/') || 
+                src.includes('bilibili.com/') || 
+                src.includes('player.bilibili.com/') || 
+                src.includes('vimeo.com/') || 
+                src.includes('player.vimeo.com/') ||
+                src.includes('youtube-nocookie.com/')) {
+                
+                iframe.removeAttribute('width');
+                iframe.removeAttribute('height');
+                iframe.setAttribute('width', '100%');
+                iframe.setAttribute('height', '100%');
+                iframe.style.position = 'absolute';
+                iframe.style.top = '0';
+                iframe.style.left = '0';
+                iframe.style.border = '0';
+                return iframe.outerHTML;
+            }
+        }
+        
+        // Find video tags
+        const videos = doc.querySelectorAll('video');
+        for (const video of videos) {
+            video.removeAttribute('width');
+            video.removeAttribute('height');
+            video.setAttribute('width', '100%');
+            video.setAttribute('height', '100%');
+            video.style.position = 'absolute';
+            video.style.top = '0';
+            video.style.left = '0';
+            video.setAttribute('controls', 'true');
+            video.setAttribute('playsinline', 'true');
+            return video.outerHTML;
+        }
+    } catch (e) {
+        console.error("Error parsing video elements from HTML:", e);
+    }
+    return null;
+}
+
+function getVideoHtmlFromUrl(url) {
+    if (!url) return null;
+    
+    // Check if it's already an embed link
+    if (url.includes('player.bilibili.com/')) {
+        return `<iframe src="${url}" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"></iframe>`;
+    }
+    if (url.includes('youtube.com/embed/') || url.includes('youtube-nocookie.com/embed/')) {
+        return `<iframe src="${url}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
+    }
+    if (url.includes('player.vimeo.com/')) {
+        return `<iframe src="${url}" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
+    }
+    
+    // 1. YouTube
+    const ytMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
+    if (ytMatch) {
+        return `<iframe src="https://www.youtube.com/embed/${ytMatch[1]}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
+    }
+    
+    // 2. Bilibili
+    const biliBvMatch = url.match(/bilibili\.com\/video\/(BV[a-zA-Z0-9]{10})/i) || url.match(/bvid=(BV[a-zA-Z0-9]{10})/i);
+    if (biliBvMatch) {
+        return `<iframe src="https://player.bilibili.com/player.html?bvid=${biliBvMatch[1]}&page=1&as_wide=1&high_quality=1&danmaku=0" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"></iframe>`;
+    }
+    const biliAvMatch = url.match(/bilibili\.com\/video\/av(\d+)/i) || url.match(/aid=(\d+)/i);
+    if (biliAvMatch) {
+        return `<iframe src="https://player.bilibili.com/player.html?aid=${biliAvMatch[1]}&page=1&as_wide=1&high_quality=1&danmaku=0" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"></iframe>`;
+    }
+    
+    // 3. Vimeo
+    const vimeoMatch = url.match(/vimeo\.com\/(?:video\/)?(\d+)/i);
+    if (vimeoMatch) {
+        return `<iframe src="https://player.vimeo.com/video/${vimeoMatch[1]}" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
+    }
+    
+    // 4. Direct Video File
+    const cleanUrl = url.split('?')[0].split('#')[0];
+    if (cleanUrl.match(/\.(mp4|webm|ogg)$/i)) {
+        return `<video src="${url}" controls playsinline preload="metadata"></video>`;
+    }
+    
+    return null;
+}
+
+function getVideoPlayerHtml(url, rawContent) {
+    const embeddedHtml = extractVideoFromHtml(rawContent);
+    if (embeddedHtml) return embeddedHtml;
+    return getVideoHtmlFromUrl(url);
 }
 
 function parseEntryDate(dateInput) {
