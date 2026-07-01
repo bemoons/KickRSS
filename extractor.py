@@ -5,6 +5,24 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
+def is_waf_or_blocked(html: str) -> bool:
+    if not html:
+        return False
+    html_lower = html.lower()
+    waf_keywords = [
+        "aliyun_waf",
+        "cf_app_waf",
+        "为了更好的访问体验，请进行验证",
+        "__cf_chl_opt",
+        "challenge-platform",
+        "sec-cpt",
+        "安全验证"
+    ]
+    for kw in waf_keywords:
+        if kw.lower() in html_lower:
+            return True
+    return False
+
 def fetch_and_extract_fulltext(url: str) -> tuple[str, str, str]:
     """
     Fetch webpage content and extract clean fulltext.
@@ -18,10 +36,16 @@ def fetch_and_extract_fulltext(url: str) -> tuple[str, str, str]:
     try:
         html = trafilatura.fetch_url(url)
         if html:
-            content = trafilatura.extract(html, include_images=True, output_format="markdown")
-            if content and len(content) >= min_chars:
-                logger.info(f"Successfully extracted fulltext ({len(content)} chars) via trafilatura")
-                return content, "ok", "trafilatura"
+            if is_waf_or_blocked(html):
+                logger.warning(f"trafilatura direct fetch hit WAF block for {url}")
+            else:
+                content = trafilatura.extract(html, include_images=True, output_format="markdown")
+                if content and len(content) >= min_chars:
+                    if is_waf_or_blocked(content):
+                        logger.warning(f"trafilatura extracted content contains WAF indicators for {url}")
+                    else:
+                        logger.info(f"Successfully extracted fulltext ({len(content)} chars) via trafilatura")
+                        return content, "ok", "trafilatura"
     except Exception as e:
         logger.warning(f"trafilatura direct fetch/extract failed for {url}: {e}")
 
@@ -38,10 +62,16 @@ def fetch_and_extract_fulltext(url: str) -> tuple[str, str, str]:
             
             if response.status_code == 200:
                 rendered_html = response.text
-                content = trafilatura.extract(rendered_html, include_images=True, output_format="markdown")
-                if content and len(content) >= min_chars:
-                    logger.info(f"Successfully extracted fulltext ({len(content)} chars) via rendering service")
-                    return content, "ok", "rendering_service"
+                if is_waf_or_blocked(rendered_html):
+                    logger.warning(f"Rendering service response hit WAF block for {url}")
+                else:
+                    content = trafilatura.extract(rendered_html, include_images=True, output_format="markdown")
+                    if content and len(content) >= min_chars:
+                        if is_waf_or_blocked(content):
+                            logger.warning(f"Rendering service extracted content contains WAF indicators for {url}")
+                        else:
+                            logger.info(f"Successfully extracted fulltext ({len(content)} chars) via rendering service")
+                            return content, "ok", "rendering_service"
             else:
                 logger.warning(f"Rendering service returned status code {response.status_code}")
         except Exception as e:
