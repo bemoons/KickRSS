@@ -18,11 +18,30 @@ def get_entry_fulltext(entry_id: int) -> Dict[str, Any]:
         if summary_row and summary_row["content"] and summary_row["content"].strip():
             has_summary = True
         
+        # 1. Try reading from cached fulltext (Fast Path)
         row = crud.get_entry_fulltext(conn, entry_id)
-        if row and (row["content"] or "").strip():
+        if row and (row["content"] or "").strip() and row["status"] == "ok":
             clean_len = ai.estimate_clean_text_length(row["content"] or "")
             return {"content": row["content"], "status": row["status"], "has_summary": has_summary, "clean_char_count": clean_len}
             
+    # 2. Cache missed or failed previously. Try self-healing: trigger single feed refresh (forcing reload)
+    try:
+        from scheduler import refresh_single_feed
+        # Force refresh the feed to pull down updated XML and run self-healing entries updates
+        refresh_single_feed(entry["feed_id"], force=True)
+    except Exception as e:
+        logger.warning(f"Forced refresh for feed {entry['feed_id']} failed during self-healing: {e}")
+
+    # Re-read the database to check if feed refresh successfully updated this entry
+    with db.get_db() as conn:
+        entry = crud.get_entry_by_id(conn, entry_id)
+        row = crud.get_entry_fulltext(conn, entry_id)
+        # If it was updated and cached as ok, return it!
+        if row and (row["content"] or "").strip() and row["status"] == "ok":
+            clean_len = ai.estimate_clean_text_length(row["content"] or "")
+            return {"content": row["content"], "status": row["status"], "has_summary": has_summary, "clean_char_count": clean_len}
+
+    # 3. If feed refresh still didn't populate it (stale, video, paid, or dropped off feed), fall back to crawler
     import extractor
     if entry["fulltext_ready"] == 1 and (entry["raw_content"] or "").strip():
         content = crud.clean_html(entry["raw_content"] or "")

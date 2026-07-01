@@ -53,36 +53,66 @@ def fetch_and_extract_fulltext(url: str) -> tuple[str, str, str]:
     except Exception as e:
         logger.warning(f"trafilatura direct fetch/extract failed for {url}: {e}")
 
-    # Try 2: Fallback to JS rendering service
-    rendering_cfg = settings.data.get("fulltext", {})
-    rendering_service_url = rendering_cfg.get("rendering_service_url")
+    # Try 2: Fallback based on config (jina or render_service)
+    fallback_engine = settings.fallback_engine
     
-    if rendering_service_url:
-        logger.info(f"Falling back to rendering service for URL: {url} -> {rendering_service_url}")
-        try:
-            # Call the rendering service (sending JSON payload)
-            with httpx.Client(timeout=30.0) as client:
-                response = client.post(rendering_service_url, json={"url": url})
-            
-            if response.status_code == 200:
-                try:
-                    rendered_html = response.json().get("html", "")
-                except Exception:
-                    rendered_html = response.text
-                
-                if is_waf_or_blocked(rendered_html):
-                    logger.warning(f"Rendering service response hit WAF block for {url}")
-                else:
-                    content = trafilatura.extract(rendered_html, include_images=True, output_format="markdown")
+    if fallback_engine == "jina":
+        jina_url = settings.jina_reader_url
+        if jina_url:
+            if not jina_url.endswith("/"):
+                jina_url += "/"
+            full_jina_url = jina_url + url
+            logger.info(f"Falling back to Jina Reader for URL: {url} -> {full_jina_url}")
+            try:
+                with httpx.Client(timeout=30.0) as client:
+                    response = client.get(full_jina_url)
+                if response.status_code == 200:
+                    jina_text = response.text or ""
+                    if "Markdown Content:" in jina_text:
+                        content = jina_text.split("Markdown Content:", 1)[1].strip()
+                    else:
+                        content = jina_text.strip()
+                    
                     if content and len(content) >= min_chars:
                         if is_waf_or_blocked(content):
-                            logger.warning(f"Rendering service extracted content contains WAF indicators for {url}")
+                            logger.warning(f"Jina Reader extracted content contains WAF indicators for {url}")
                         else:
-                            logger.info(f"Successfully extracted fulltext ({len(content)} chars) via rendering service")
-                            return content, "ok", "rendering_service"
-            else:
-                logger.warning(f"Rendering service returned status code {response.status_code}")
-        except Exception as e:
-            logger.error(f"Failed to fetch from rendering service for {url}: {e}")
-            
+                            logger.info(f"Successfully extracted fulltext ({len(content)} chars) via Jina Reader")
+                            return content, "ok", "jina"
+                else:
+                    logger.warning(f"Jina Reader returned status code {response.status_code}")
+            except Exception as e:
+                logger.error(f"Failed to fetch from Jina Reader for {url}: {e}")
+                
+    elif fallback_engine == "render_service":
+        rendering_cfg = settings.data.get("fulltext", {})
+        rendering_service_url = rendering_cfg.get("rendering_service_url")
+        if rendering_service_url:
+            logger.info(f"Falling back to rendering service for URL: {url} -> {rendering_service_url}")
+            try:
+                # Call the rendering service (sending JSON payload)
+                with httpx.Client(timeout=30.0) as client:
+                    response = client.post(rendering_service_url, json={"url": url})
+                
+                if response.status_code == 200:
+                    try:
+                        rendered_html = response.json().get("html", "")
+                    except Exception:
+                        rendered_html = response.text
+                    
+                    if is_waf_or_blocked(rendered_html):
+                        logger.warning(f"Rendering service response hit WAF block for {url}")
+                    else:
+                        content = trafilatura.extract(rendered_html, include_images=True, output_format="markdown")
+                        if content and len(content) >= min_chars:
+                            if is_waf_or_blocked(content):
+                                logger.warning(f"Rendering service extracted content contains WAF indicators for {url}")
+                            else:
+                                logger.info(f"Successfully extracted fulltext ({len(content)} chars) via rendering service")
+                                return content, "ok", "rendering_service"
+                else:
+                    logger.warning(f"Rendering service returned status code {response.status_code}")
+            except Exception as e:
+                logger.error(f"Failed to fetch from rendering service for {url}: {e}")
+                
     return "", "fetch_failed", "trafilatura"

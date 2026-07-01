@@ -54,6 +54,16 @@ class Settings:
         return fulltext_cfg.get("min_text_chars", 200)
 
     @property
+    def fallback_engine(self) -> str:
+        fulltext_cfg = self.data.get("fulltext", {})
+        return fulltext_cfg.get("fallback_engine", "jina")
+
+    @property
+    def jina_reader_url(self) -> str:
+        fulltext_cfg = self.data.get("fulltext", {})
+        return fulltext_cfg.get("jina_reader_url", "https://r.jina.ai/")
+
+    @property
     def promote_threshold(self) -> int:
         classify_cfg = self.data.get("classify", {})
         return classify_cfg.get("promote_threshold", 5)

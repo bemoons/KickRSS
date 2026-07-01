@@ -26,7 +26,9 @@ ai:
   summary_language: zh
 fulltext:
   fetcher: trafilatura
+  fallback_engine: jina # Choose fallback engine: "jina" or "render_service"
   rendering_service_url: http://localhost:3100/render
+  jina_reader_url: https://r.jina.ai/
   min_text_chars: 200
 classify:
   promote_threshold: 5

@@ -68,7 +68,7 @@ def ensure_feed_seeded(feed_id: int) -> bool:
         logger.error(f"Failed to auto-seed categories for feed {feed_id}: {e}", exc_info=True)
         return False
 
-def refresh_single_feed(feed_id: int) -> tuple[int, int]:
+def refresh_single_feed(feed_id: int, force: bool = False) -> tuple[int, int]:
     """
     Refresh a single feed by ID.
     Returns a tuple of (fetched_entries_count, new_entries_count).
@@ -79,8 +79,8 @@ def refresh_single_feed(feed_id: int) -> tuple[int, int]:
             return 0, 0
         
         url = feed["url"]
-        etag = feed["etag"]
-        last_modified = feed["last_modified"]
+        etag = None if force else feed["etag"]
+        last_modified = None if force else feed["last_modified"]
         
     logger.info(f"Refreshing feed {feed_id}: {url}")
     
