@@ -233,8 +233,36 @@ def save_entries(
 
     for entry in raw_entries:
         # Check if guid already exists for this feed
-        cursor.execute("SELECT id FROM entries WHERE feed_id = ? AND guid = ?", (feed_id, entry.guid))
-        if cursor.fetchone():
+        cursor.execute("SELECT id, raw_content, fulltext_ready FROM entries WHERE feed_id = ? AND guid = ?", (feed_id, entry.guid))
+        existing = cursor.fetchone()
+        if existing:
+            existing_id, existing_content, existing_fulltext_ready = existing
+            new_content = entry.raw_content or ""
+            # Self-healing: If existing content lacks fulltext and feed has updated with longer text, update it
+            if not existing_fulltext_ready and len(new_content) > len(existing_content or ""):
+                fulltext_ready = 1 if len(new_content) >= min_chars else 0
+                cursor.execute("""
+                    UPDATE entries 
+                    SET raw_content = ?, fulltext_ready = ?
+                    WHERE id = ?
+                """, (new_content, fulltext_ready, existing_id))
+                
+                # If fulltext is now ready, clean and cache it
+                if fulltext_ready == 1:
+                    clean_content = clean_html(new_content)
+                    status = "ok" if len(clean_content) >= min_chars else "no_text"
+                    cursor.execute("SELECT entry_id FROM fulltext WHERE entry_id = ?", (existing_id,))
+                    if cursor.fetchone():
+                        cursor.execute("""
+                            UPDATE fulltext 
+                            SET content = ?, status = ?, fetched_at = ?, fetcher = 'feed'
+                            WHERE entry_id = ?
+                        """, (clean_content, status, now_str, existing_id))
+                    else:
+                        cursor.execute("""
+                            INSERT INTO fulltext (entry_id, content, status, fetched_at, fetcher)
+                            VALUES (?, ?, ?, ?, 'feed')
+                        """, (existing_id, clean_content, status, now_str))
             continue
 
         raw_content = entry.raw_content or ""
