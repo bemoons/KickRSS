@@ -3,8 +3,6 @@ version: '3.8'
 
 services:
   myrss:
-    build:
-      context: .
     image: myrss-refactored:latest
     container_name: myrss-refactored
     restart: unless-stopped
