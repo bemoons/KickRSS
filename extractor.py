@@ -31,6 +31,10 @@ def fetch_and_extract_fulltext(url: str) -> tuple[str, str, str]:
     """
     min_chars = settings.min_text_chars
     
+    # Strip tracking query parameters for huxiu.com to prevent triggering WAF block rules
+    if "huxiu.com" in url and "?" in url:
+        url = url.split("?")[0]
+    
     # Try 1: trafilatura direct fetch & extract
     logger.info(f"Extracting fulltext via trafilatura for URL: {url}")
     try:
@@ -61,7 +65,11 @@ def fetch_and_extract_fulltext(url: str) -> tuple[str, str, str]:
                 response = client.post(rendering_service_url, json={"url": url})
             
             if response.status_code == 200:
-                rendered_html = response.text
+                try:
+                    rendered_html = response.json().get("html", "")
+                except Exception:
+                    rendered_html = response.text
+                
                 if is_waf_or_blocked(rendered_html):
                     logger.warning(f"Rendering service response hit WAF block for {url}")
                 else:
