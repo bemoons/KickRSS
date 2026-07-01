@@ -241,11 +241,18 @@ def save_entries(
             # Self-healing: If existing content lacks fulltext and feed has updated with longer text, update it
             if not existing_fulltext_ready and len(new_content) > len(existing_content or ""):
                 fulltext_ready = 1 if len(new_content) >= min_chars else 0
-                cursor.execute("""
-                    UPDATE entries 
-                    SET raw_content = ?, fulltext_ready = ?
-                    WHERE id = ?
-                """, (new_content, fulltext_ready, existing_id))
+                if fulltext_ready == 1:
+                    cursor.execute("""
+                        UPDATE entries 
+                        SET raw_content = ?, fulltext_ready = ?, likely_no_text = 0
+                        WHERE id = ?
+                    """, (new_content, fulltext_ready, existing_id))
+                else:
+                    cursor.execute("""
+                        UPDATE entries 
+                        SET raw_content = ?, fulltext_ready = ?
+                        WHERE id = ?
+                    """, (new_content, fulltext_ready, existing_id))
                 
                 # If fulltext is now ready, clean and cache it
                 if fulltext_ready == 1:
@@ -546,12 +553,19 @@ def save_fulltext(
         VALUES (?, ?, ?, ?, ?)
     """, (entry_id, content, status, now_str, fetcher))
     
-    # 2. Update entries table setting fulltext_ready = 1
-    cursor.execute("""
-        UPDATE entries 
-        SET fulltext_ready = 1 
-        WHERE id = ?
-    """, (entry_id,))
+    # 2. Update entries table setting fulltext_ready = 1 (and likely_no_text = 0 if status is ok)
+    if status == "ok":
+        cursor.execute("""
+            UPDATE entries 
+            SET fulltext_ready = 1, likely_no_text = 0 
+            WHERE id = ?
+        """, (entry_id,))
+    else:
+        cursor.execute("""
+            UPDATE entries 
+            SET fulltext_ready = 1 
+            WHERE id = ?
+        """, (entry_id,))
 
 def save_chat_message(conn: sqlite3.Connection, entry_id: int, role: str, content: str):
     cursor = conn.cursor()
