@@ -68,7 +68,7 @@ def ensure_feed_seeded(feed_id: int) -> bool:
         logger.error(f"Failed to auto-seed categories for feed {feed_id}: {e}", exc_info=True)
         return False
 
-def refresh_single_feed(feed_id: int, force: bool = False) -> tuple[int, int]:
+def refresh_single_feed(feed_id: int, force: bool = False, skip_classification: bool = False) -> tuple[int, int]:
     """
     Refresh a single feed by ID.
     Returns a tuple of (fetched_entries_count, new_entries_count).
@@ -123,11 +123,12 @@ def refresh_single_feed(feed_id: int, force: bool = False) -> tuple[int, int]:
         logger.error(f"Failed to ensure feed {feed_id} is seeded: {e}", exc_info=True)
         
     # Classify any unclassified entries for this feed (either new or reset/fallback ones)
-    try:
-        from classifier import classify_feed_entries
-        classify_feed_entries(feed_id)
-    except Exception as e:
-        logger.error(f"Failed to classify entries for feed {feed_id}: {e}", exc_info=True)
+    if not skip_classification:
+        try:
+            from classifier import classify_feed_entries
+            classify_feed_entries(feed_id)
+        except Exception as e:
+            logger.error(f"Failed to classify entries for feed {feed_id}: {e}", exc_info=True)
             
     return fetched_count, new_count
 

@@ -24,11 +24,21 @@ def get_entry_fulltext(entry_id: int) -> Dict[str, Any]:
             clean_len = ai.estimate_clean_text_length(row["content"] or "")
             return {"content": row["content"], "status": row["status"], "has_summary": has_summary, "clean_char_count": clean_len}
             
-    # 2. Cache missed or failed previously. Try self-healing: trigger single feed refresh (forcing reload)
+        min_chars = settings.min_text_chars
+        
+        # 2. Prioritize raw_content in the database if it is already present and long enough!
+        if (entry["raw_content"] or "").strip():
+            clean_content = crud.clean_html(entry["raw_content"])
+            if len(clean_content) >= min_chars:
+                crud.save_fulltext(conn, entry_id, clean_content, "ok", "feed")
+                clean_len = ai.estimate_clean_text_length(clean_content)
+                return {"content": clean_content, "status": "ok", "has_summary": has_summary, "clean_char_count": clean_len}
+            
+    # 3. Cache missed or too short. Try self-healing: trigger single feed refresh (forcing reload)
     try:
         from scheduler import refresh_single_feed
         # Force refresh the feed to pull down updated XML and run self-healing entries updates
-        refresh_single_feed(entry["feed_id"], force=True)
+        refresh_single_feed(entry["feed_id"], force=True, skip_classification=True)
     except Exception as e:
         logger.warning(f"Forced refresh for feed {entry['feed_id']} failed during self-healing: {e}")
 
@@ -36,23 +46,24 @@ def get_entry_fulltext(entry_id: int) -> Dict[str, Any]:
     with db.get_db() as conn:
         entry = crud.get_entry_by_id(conn, entry_id)
         row = crud.get_entry_fulltext(conn, entry_id)
-        # If it was updated and cached as ok, return it!
         if row and (row["content"] or "").strip() and row["status"] == "ok":
             clean_len = ai.estimate_clean_text_length(row["content"] or "")
             return {"content": row["content"], "status": row["status"], "has_summary": has_summary, "clean_char_count": clean_len}
 
-    # 3. If feed refresh still didn't populate it (stale, video, paid, or dropped off feed), fall back to crawler
+        if (entry["raw_content"] or "").strip():
+            clean_content = crud.clean_html(entry["raw_content"])
+            if len(clean_content) >= min_chars:
+                crud.save_fulltext(conn, entry_id, clean_content, "ok", "feed")
+                clean_len = ai.estimate_clean_text_length(clean_content)
+                return {"content": clean_content, "status": "ok", "has_summary": has_summary, "clean_char_count": clean_len}
+
+    # 4. If feed refresh still didn't populate it (stale, video, paid, or dropped off feed), fall back to crawler
     import extractor
-    if entry["fulltext_ready"] == 1 and (entry["raw_content"] or "").strip():
+    content, status, fetcher = extractor.fetch_and_extract_fulltext(entry["url"])
+    if status == "fetch_failed" and (entry["raw_content"] or "").strip():
         content = crud.clean_html(entry["raw_content"] or "")
         status = "ok"
         fetcher = "feed"
-    else:
-        content, status, fetcher = extractor.fetch_and_extract_fulltext(entry["url"])
-        if status == "fetch_failed" and (entry["raw_content"] or "").strip():
-            content = crud.clean_html(entry["raw_content"] or "")
-            status = "ok"
-            fetcher = "feed"
         
     with db.get_db() as conn:
         crud.save_fulltext(conn, entry_id, content, status, fetcher)
