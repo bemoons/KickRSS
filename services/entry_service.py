@@ -2,6 +2,7 @@ import logging
 import db
 import crud
 import ai
+from config import settings
 from typing import List, Optional, Dict, Any
 from fastapi import HTTPException
 
