@@ -560,6 +560,12 @@ def save_fulltext(
             SET fulltext_ready = 1, likely_no_text = 0 
             WHERE id = ?
         """, (entry_id,))
+    elif status == "video":
+        cursor.execute("""
+            UPDATE entries 
+            SET fulltext_ready = 1, likely_no_text = 1 
+            WHERE id = ?
+        """, (entry_id,))
     else:
         cursor.execute("""
             UPDATE entries 

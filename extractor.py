@@ -23,6 +23,37 @@ def is_waf_or_blocked(html: str) -> bool:
             return True
     return False
 
+def is_video_page(url: str, html_or_markdown: str) -> bool:
+    if not html_or_markdown:
+        return False
+    lower_content = html_or_markdown.lower()
+    
+    # Direct HTML metadata and class checks
+    if ('articleSection":"视频"' in html_or_markdown or
+        'is_video_article":true' in html_or_markdown or
+        'is_video_article":1' in html_or_markdown or
+        'class="article__top-video"' in html_or_markdown or
+        'class="video-player-container"' in html_or_markdown or
+        'property="og:type" content="video"' in html_or_markdown or
+        'property="og:type" content="video.other"' in html_or_markdown):
+        return True
+        
+    # Markdown / General URL / CDN checks
+    if "huxiu.com" in url:
+        if ("s2-video.huxiucdn.com" in lower_content or
+            "v2-video.huxiucdn.com" in lower_content or
+            "[video " in lower_content):
+            return True
+            
+    # General third-party embeds
+    if ("player.bilibili.com" in lower_content or
+        "youtube.com/embed" in lower_content or
+        "player.vimeo.com" in lower_content):
+        return True
+        
+    return False
+
+
 def fetch_and_extract_fulltext(url: str) -> tuple[str, str, str]:
     """
     Fetch webpage content and extract clean fulltext.
@@ -43,6 +74,9 @@ def fetch_and_extract_fulltext(url: str) -> tuple[str, str, str]:
             if is_waf_or_blocked(html):
                 logger.warning(f"trafilatura direct fetch hit WAF block for {url}")
             else:
+                if is_video_page(url, html):
+                    logger.info(f"Detected video page via direct HTML: {url}")
+                    return "此文章主要包含视频/多媒体内容，无正文可提取。请点击标题或右上角链接查看原始视频。", "video", "trafilatura"
                 content = trafilatura.extract(html, include_images=True, output_format="markdown")
                 if content and len(content) >= min_chars:
                     if is_waf_or_blocked(content):
@@ -73,6 +107,10 @@ def fetch_and_extract_fulltext(url: str) -> tuple[str, str, str]:
                     else:
                         content = jina_text.strip()
                     
+                    if is_video_page(url, content):
+                        logger.info(f"Detected video page via Jina response: {url}")
+                        return "此文章主要包含视频/多媒体内容，无正文可提取。请点击标题或右上角链接查看原始视频。", "video", "jina"
+                    
                     if content and len(content) >= min_chars:
                         if is_waf_or_blocked(content):
                             logger.warning(f"Jina Reader extracted content contains WAF indicators for {url}")
@@ -99,6 +137,10 @@ def fetch_and_extract_fulltext(url: str) -> tuple[str, str, str]:
                         rendered_html = response.json().get("html", "")
                     except Exception:
                         rendered_html = response.text
+                    
+                    if is_video_page(url, rendered_html):
+                        logger.info(f"Detected video page via rendering service response: {url}")
+                        return "此文章主要包含视频/多媒体内容，无正文可提取。请点击标题或右上角链接查看原始视频。", "video", "rendering_service"
                     
                     if is_waf_or_blocked(rendered_html):
                         logger.warning(f"Rendering service response hit WAF block for {url}")

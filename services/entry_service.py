@@ -20,7 +20,7 @@ def get_entry_fulltext(entry_id: int) -> Dict[str, Any]:
         
         # 1. Try reading from cached fulltext (Fast Path)
         row = crud.get_entry_fulltext(conn, entry_id)
-        if row and (row["content"] or "").strip() and row["status"] == "ok":
+        if row and (row["content"] or "").strip() and (row["status"] == "ok" or row["status"] == "video"):
             clean_len = ai.estimate_clean_text_length(row["content"] or "")
             return {"content": row["content"], "status": row["status"], "has_summary": has_summary, "clean_char_count": clean_len}
             
@@ -46,7 +46,7 @@ def get_entry_fulltext(entry_id: int) -> Dict[str, Any]:
     with db.get_db() as conn:
         entry = crud.get_entry_by_id(conn, entry_id)
         row = crud.get_entry_fulltext(conn, entry_id)
-        if row and (row["content"] or "").strip() and row["status"] == "ok":
+        if row and (row["content"] or "").strip() and (row["status"] == "ok" or row["status"] == "video"):
             clean_len = ai.estimate_clean_text_length(row["content"] or "")
             return {"content": row["content"], "status": row["status"], "has_summary": has_summary, "clean_char_count": clean_len}
 
