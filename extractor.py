@@ -53,6 +53,15 @@ def is_video_page(url: str, html_or_markdown: str) -> bool:
         
     return False
 
+def is_video_url(url: str) -> bool:
+    lower_url = url.lower()
+    return ("youtube.com/watch" in lower_url or
+            "youtu.be/" in lower_url or
+            "bilibili.com/video/" in lower_url or
+            "v.qq.com/x/page/" in lower_url or
+            "v.qq.com/x/cover/" in lower_url)
+
+
 
 def fetch_and_extract_fulltext(url: str) -> tuple[str, str, str]:
     """
@@ -65,6 +74,10 @@ def fetch_and_extract_fulltext(url: str) -> tuple[str, str, str]:
     # Strip tracking query parameters for huxiu.com to prevent triggering WAF block rules
     if "huxiu.com" in url and "?" in url:
         url = url.split("?")[0]
+        
+    if is_video_url(url):
+        logger.info(f"Detected video page via URL pattern: {url}")
+        return "此文章主要包含视频/多媒体内容，无正文可提取。请点击标题或右上角链接查看原始视频。", "video", "trafilatura"
     
     # Try 1: trafilatura direct fetch & extract
     logger.info(f"Extracting fulltext via trafilatura for URL: {url}")
