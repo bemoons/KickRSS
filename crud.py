@@ -452,10 +452,11 @@ def update_entry_attention(conn: sqlite3.Connection, entry_id: int, attention: s
 
 def get_unclassified_entries(conn: sqlite3.Connection, feed_id: int) -> List[sqlite3.Row]:
     cursor = conn.cursor()
-    cursor.execute("""
         SELECT id, title, raw_content 
         FROM entries 
         WHERE feed_id = ? AND classified_at IS NULL
+        ORDER BY published_at DESC
+        LIMIT 100
     """, (feed_id,))
     return cursor.fetchall()
 

@@ -1,4 +1,5 @@
 import logging
+import threading
 from typing import List, Dict, Any
 import db
 import crud
@@ -7,10 +8,30 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
+# Global locks and sets to prevent concurrent classification or pregeneration for the same feed
+classification_lock = threading.Lock()
+running_classifications = set()
+
+pregen_lock = threading.Lock()
+running_pregens = set()
+
 def classify_feed_entries(feed_id: int):
     """
     Classify all unclassified entries for a specific feed in batches.
     """
+    with classification_lock:
+        if feed_id in running_classifications:
+            logger.info(f"Classification for feed {feed_id} is already in progress. Skipping duplicate run.")
+            return
+        running_classifications.add(feed_id)
+
+    try:
+        _classify_feed_entries_impl(feed_id)
+    finally:
+        with classification_lock:
+            running_classifications.discard(feed_id)
+
+def _classify_feed_entries_impl(feed_id: int):
     logger.info(f"Starting classification for feed {feed_id}")
     
     with db.get_db() as conn:
@@ -124,7 +145,20 @@ def pregenerate_summaries_for_feed(feed_id: int):
     ai_cfg = settings.get_ai_config("summary")
     if not ai_cfg.get("pregenerate"):
         return
-        
+
+    with pregen_lock:
+        if feed_id in running_pregens:
+            logger.info(f"Summary pregeneration for feed {feed_id} is already in progress. Skipping duplicate run.")
+            return
+        running_pregens.add(feed_id)
+
+    try:
+        _pregenerate_summaries_for_feed_impl(feed_id, ai_cfg)
+    finally:
+        with pregen_lock:
+            running_pregens.discard(feed_id)
+
+def _pregenerate_summaries_for_feed_impl(feed_id: int, ai_cfg: dict):
     logger.info(f"Checking for summaries to pregenerate for feed {feed_id}")
     with db.get_db() as conn:
         cursor = conn.cursor()
@@ -135,6 +169,8 @@ def pregenerate_summaries_for_feed(feed_id: int):
             LEFT JOIN summaries s ON s.entry_id = e.id
             WHERE e.feed_id = ? AND e.attention = 'read' AND e.fulltext_ready = 1 
               AND f.status = 'ok' AND s.entry_id IS NULL
+            ORDER BY e.published_at DESC
+            LIMIT 5
         """, (feed_id,))
         rows = cursor.fetchall()
         
