@@ -16,6 +16,8 @@ class RawEntry:
     author: Optional[str]
     published_at: Optional[str]
     raw_content: Optional[str]
+    likely_no_text: int = 0
+    fulltext_ready: int = 0
 
 @dataclass
 class FetchResult:
@@ -159,6 +161,12 @@ class FeedparserIngester:
             if not raw_content:
                 raw_content = entry.get("summary")
 
+            # Check for custom type (e.g. Huxiu <type>video_article</type>)
+            custom_type = entry.get("type")
+            is_type_video = custom_type in ("video_article", "video")
+            likely_no_text = 1 if is_type_video else 0
+            fulltext_ready = 1 if is_type_video else 0
+
             raw_entries.append(
                 RawEntry(
                     guid=guid,
@@ -166,7 +174,9 @@ class FeedparserIngester:
                     url=url,
                     author=author,
                     published_at=published_at,
-                    raw_content=raw_content
+                    raw_content=raw_content,
+                    likely_no_text=likely_no_text,
+                    fulltext_ready=fulltext_ready
                 )
             )
         return raw_entries

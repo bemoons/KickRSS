@@ -276,12 +276,15 @@ def save_entries(
         raw_content_len = len(raw_content)
         
         # Decide fulltext_ready and likely_no_text
-        fulltext_ready = 1 if raw_content_len >= min_chars else 0
-        
-        content_lower = raw_content.lower()
-        likely_no_text = 0
-        if raw_content_len < min_chars and ("<video" in content_lower or "<iframe" in content_lower):
-            likely_no_text = 1
+        if getattr(entry, "likely_no_text", 0) or getattr(entry, "fulltext_ready", 0):
+            likely_no_text = entry.likely_no_text
+            fulltext_ready = entry.fulltext_ready
+        else:
+            fulltext_ready = 1 if raw_content_len >= min_chars else 0
+            content_lower = raw_content.lower()
+            likely_no_text = 0
+            if raw_content_len < min_chars and ("<video" in content_lower or "<iframe" in content_lower):
+                likely_no_text = 1
 
         # Insert entry
         cursor.execute("""
@@ -299,12 +302,18 @@ def save_entries(
 
         # If fulltext is ready (feed has full text), clean and cache it
         if fulltext_ready == 1:
-            clean_content = clean_html(raw_content)
-            status = "ok" if len(clean_content) >= min_chars else "no_text"
-            cursor.execute("""
-                INSERT INTO fulltext (entry_id, content, status, fetched_at, fetcher)
-                VALUES (?, ?, ?, ?, 'feed')
-            """, (entry_id, clean_content, status, now_str))
+            if likely_no_text == 1:
+                cursor.execute("""
+                    INSERT INTO fulltext (entry_id, content, status, fetched_at, fetcher)
+                    VALUES (?, '此文章主要包含视频/多媒体内容，无正文可提取。请点击标题或右上角链接查看原始视频。', 'video', ?, 'feed')
+                """, (entry_id, now_str))
+            else:
+                clean_content = clean_html(raw_content)
+                status = "ok" if len(clean_content) >= min_chars else "no_text"
+                cursor.execute("""
+                    INSERT INTO fulltext (entry_id, content, status, fetched_at, fetcher)
+                    VALUES (?, ?, ?, ?, 'feed')
+                """, (entry_id, clean_content, status, now_str))
 
     return new_count
 
