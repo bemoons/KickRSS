@@ -30,31 +30,48 @@
 
 ## 🚀 快速开始
 
-### 方式一：使用 Docker Compose 部署（推荐 ⭐）
+### 方式一：使用 Docker Compose / Portainer Stack 部署（推荐 ⭐）
 
-我们提供了完整的 Docker 化支持，可实现开箱即用及自动开机自启。
+我们提供了预编译托管镜像，可实现开箱即用、一键拉取部署，无需本地下载源码或编译。
 
-1. **准备挂载目录**：
-   在宿主机项目根目录下创建 `data` 目录：
+1. **创建配置文件和挂载目录**：
+   在宿主机上创建数据持久化目录（例如 `/home/bemoon/kickRSS/data` 或您自定义的路径）：
    ```bash
-   mkdir -p data
+   mkdir -p /home/bemoon/kickRSS/data
    ```
 
-2. **启动容器**：
-   直接使用 Docker Compose 运行：
-   ```bash
-   docker compose up -d --build
+2. **编写 docker-compose.yml**：
+   在部署目录（或 Portainer Stack 编辑器）中写入以下配置：
+   ```yaml
+   version: '3.8'
+   services:
+     kickrss:
+       image: ghcr.io/bemoons/kickrss:latest  # 直接使用云端自动构建的预编译镜像
+       container_name: kickrss
+       network_mode: host
+       restart: unless-stopped
+       volumes:
+         - /home/bemoon/kickRSS/data:/app/data
+       environment:
+         - PORT=8888
+         - TZ=Asia/Shanghai
    ```
-   *首次启动时，系统会自动在 `./data` 下初始化生成 `config.yaml` 配置文件及 `myrss.db` 数据库。*
 
-3. **修改配置**：
-   编辑本地宿主机上的 `./data/config.yaml`（参考下文配置 AI 密钥），然后重启容器即可：
+3. **启动容器**：
+   直接运行以下命令（或在 Portainer 界面点击 Deploy Stack）：
+   ```bash
+   docker compose up -d
+   ```
+   *首次启动时，系统会自动在挂载的 `data` 目录下初始化生成 `config.yaml` 配置文件及 `myrss.db` 数据库。*
+
+4. **修改配置**：
+   编辑挂载目录下的 `config.yaml` 配置文件（参考下文配置 AI 密钥），然后重启容器即可生效：
    ```bash
    docker compose restart
    ```
 
-4. **访问服务**：
-   在浏览器中打开 `http://localhost:8888` 即可开始使用。
+5. **访问服务**：
+   在浏览器中打开 `http://<您的服务器IP>:8888` 即可开始使用。
 
 ---
 
