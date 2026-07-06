@@ -54,7 +54,7 @@ def call_chat_completion(
         
     disabler_added = False
     if disable_reasoning:
-        append_reasoning_disabler(payload, config["model"], config["base_url"])
+        append_reasoning_disabler(payload, config["model"], config["base_url"], config.get("reasoning_disabler", "auto"))
         disabler_added = True
         
     try:
@@ -234,7 +234,15 @@ def classify_entries_batch(
     ]
     
     def process_response(content: str) -> List[Dict[str, Any]]:
-        data = json.loads(content)
+        clean_content = content.strip()
+        if clean_content.startswith("```"):
+            lines = clean_content.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            clean_content = "\n".join(lines).strip()
+        data = json.loads(clean_content)
         results = data.get("results", [])
         return results
 
@@ -463,7 +471,7 @@ def generate_summary_stream(
     elif config.get("max_tokens"):
         payload["max_tokens"] = config["max_tokens"]
 
-    append_reasoning_disabler(payload, config["model"], config["base_url"])
+    append_reasoning_disabler(payload, config["model"], config["base_url"], config.get("reasoning_disabler", "auto"))
     
     def fetch_stream(use_disabler):
         current_payload = dict(payload)
@@ -644,7 +652,7 @@ def generate_chat_response_stream(
         payload["max_tokens"] = config["max_tokens"]
         
     if not use_reasoning:
-        append_reasoning_disabler(payload, config["model"], config["base_url"])
+        append_reasoning_disabler(payload, config["model"], config["base_url"], config.get("reasoning_disabler", "auto"))
         
     try:
         filter_obj = ThinkFilter()
@@ -1028,12 +1036,31 @@ class ThinkFilter:
 
 def is_reasoning_model(model: str) -> bool:
     m = model.lower()
-    return "r1" in m or "qwq" in m or "reasoner" in m or "thinking" in m or "reasoning" in m or "qwen" in m or "3.6" in m or "3.5" in m or "a3b" in m
+    return "r1" in m or "qwq" in m or "reasoner" in m or "thinking" in m or "reasoning" in m or "qwen" in m or "3.6" in m or "3.5" in m or "a3b" in m or "ornith" in m
 
-def append_reasoning_disabler(req_payload: Dict[str, Any], model: str, base_url: str):
+def append_reasoning_disabler(req_payload: Dict[str, Any], model: str, base_url: str, disabler_format: str = "auto"):
     m = model.lower()
     url = base_url.lower()
+    fmt = (disabler_format or "auto").lower()
     
+    # 1. Explicit disabler format specified by user config
+    if fmt == "vllm":
+        req_payload["chat_template_kwargs"] = {"enable_thinking": False}
+        req_payload["enable_thinking"] = False
+        return
+    elif fmt == "deepseek":
+        req_payload["thinking"] = {"type": "disabled"}
+        return
+    elif fmt == "gemini":
+        req_payload["thinking_config"] = {"thinking_budget": 0}
+        return
+    elif fmt == "ollama":
+        req_payload["think"] = False
+        return
+    elif fmt == "none":
+        return
+        
+    # 2. Default Auto-matching
     # Gemini
     if "gemini" in m or "googleapis.com" in url:
         req_payload["thinking_config"] = {"thinking_budget": 0}
@@ -1053,6 +1080,15 @@ def append_reasoning_disabler(req_payload: Dict[str, Any], model: str, base_url:
     if is_reasoning_model(model):
         req_payload["chat_template_kwargs"] = {"enable_thinking": False}
         req_payload["enable_thinking"] = False
+        return
+        
+    # Unknown model: Check if it's NOT a known standard non-reasoning model (like GPT/Claude)
+    non_reasoning_keywords = ["gpt-4", "gpt-3.5", "claude", "gemini-1.5", "mixtral", "llama-3-", "llama-3.1-", "llama-3.2-"]
+    if not any(kw in m for kw in non_reasoning_keywords):
+        # Apply hybrid vLLM + Ollama disabler
+        req_payload["chat_template_kwargs"] = {"enable_thinking": False}
+        req_payload["enable_thinking"] = False
+        req_payload["think"] = False
 
 def test_llm_reasoning(api_base_url: str, api_key: str, model: str):
     import httpx

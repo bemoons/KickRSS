@@ -249,8 +249,91 @@ const elements = {
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initEventListeners();
-    loadSettingsOnStartup().then(() => {
-        loadFeeds();
+    loadSettingsOnStartup().then(async () => {
+        // Check if there is a saved navigation state
+        const savedStateStr = window.sessionStorage.getItem('KICKRSS_NAV_STATE');
+        window.sessionStorage.removeItem('KICKRSS_NAV_STATE'); // Clear it immediately
+        
+        let hasRestored = false;
+        if (savedStateStr) {
+            try {
+                const navState = JSON.parse(savedStateStr);
+                state.activeView = navState.activeView || 'unread';
+                state.selectedFeedId = navState.selectedFeedId;
+                state.selectedCategoryId = navState.selectedCategoryId;
+                state.filterUnreadOnly = navState.filterUnreadOnly !== false;
+                hasRestored = true;
+            } catch (e) {
+                console.error("Error parsing navigation state:", e);
+            }
+        }
+        
+        await loadFeeds();
+        
+        if (hasRestored) {
+            try {
+                const navState = JSON.parse(savedStateStr);
+                
+                // Restore filter checkbox UI state
+                if (elements.filterUnreadToggle) {
+                    elements.filterUnreadToggle.checked = state.filterUnreadOnly;
+                }
+                
+                // Clear active navigation buttons
+                if (elements.btnAllUnread) elements.btnAllUnread.classList.remove('active');
+                if (elements.btnStarred) elements.btnStarred.classList.remove('active');
+                if (elements.btnNotes) elements.btnNotes.classList.remove('active');
+                
+                // Reload correct entry list
+                if (state.activeView === 'feed' && state.selectedFeedId) {
+                    const feed = state.feeds.find(f => f.id === state.selectedFeedId);
+                    elements.currentCategoryName.textContent = feed ? feed.title : "订阅源";
+                    await loadFeedEntries(state.selectedFeedId);
+                } else if (state.activeView === 'category' && state.selectedCategoryId) {
+                    elements.currentCategoryName.textContent = navState.categoryName || "分类";
+                    document.querySelectorAll('.feed-row').forEach(node => node.classList.remove('active'));
+                    const parentFeedRow = document.querySelector(`.feed-item[data-id="${state.selectedFeedId}"] .feed-row`);
+                    if (parentFeedRow) parentFeedRow.classList.add('active');
+                    
+                    const feedItem = document.querySelector(`.feed-item[data-id="${state.selectedFeedId}"]`);
+                    if (feedItem) {
+                        feedItem.classList.add('expanded');
+                        await loadCategoriesForFeed(state.selectedFeedId, feedItem);
+                    }
+                    await loadCategoryEntries(state.selectedCategoryId);
+                } else if (state.activeView === 'starred') {
+                    if (elements.btnStarred) elements.btnStarred.classList.add('active');
+                    elements.currentCategoryName.textContent = "我的收藏";
+                    await loadStarredEntries();
+                } else if (state.activeView === 'notes') {
+                    if (elements.btnNotes) elements.btnNotes.classList.add('active');
+                    elements.currentCategoryName.textContent = "我的笔记";
+                    await loadNotesEntries();
+                } else {
+                    state.activeView = 'unread';
+                    if (elements.btnAllUnread) elements.btnAllUnread.classList.add('active');
+                    elements.currentCategoryName.textContent = "所有未读";
+                    await loadUnreadEntries();
+                }
+                
+                // Restore savedState's selected entry
+                if (navState.selectedEntryId) {
+                    await selectEntry(navState.selectedEntryId);
+                }
+                
+                // Restore mobile UI classes on body
+                if (navState.showEntries) {
+                    document.body.classList.add('show-entries');
+                }
+                if (navState.showDetail) {
+                    document.body.classList.add('show-detail');
+                }
+                return;
+            } catch (e) {
+                console.error("Error applying restored navigation state:", e);
+            }
+        }
+        
         selectGlobalUnread(true);
     });
     initResizers();
@@ -6705,11 +6788,32 @@ function initEngagementTracking() {
         });
     }
 
+    function saveNavigationState() {
+        const navState = {
+            activeView: state.activeView,
+            selectedFeedId: state.selectedFeedId,
+            selectedCategoryId: state.selectedCategoryId,
+            selectedEntryId: state.selectedEntryId,
+            filterUnreadOnly: state.filterUnreadOnly,
+            categoryName: elements.currentCategoryName.textContent,
+            showEntries: document.body.classList.contains('show-entries'),
+            showDetail: document.body.classList.contains('show-detail')
+        };
+        window.sessionStorage.setItem('KICKRSS_NAV_STATE', JSON.stringify(navState));
+    }
+
     if (elements.artOriginalLink) {
         elements.artOriginalLink.addEventListener('click', () => {
             if (currentEngagement) {
                 currentEngagement.openedOriginal = true;
             }
+            saveNavigationState();
+        });
+    }
+
+    if (elements.artTitleLink) {
+        elements.artTitleLink.addEventListener('click', () => {
+            saveNavigationState();
         });
     }
 

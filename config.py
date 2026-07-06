@@ -111,13 +111,13 @@ class Settings:
                 pass
                 
             if is_numeric:
-                max_tokens = max(target_num * 3, 1000)
+                max_tokens = max(target_num * 3, 1500)
             elif len_val == "short":
-                max_tokens = 300
-            elif len_val == "long":
-                max_tokens = 1000
-            else:
                 max_tokens = 500
+            elif len_val == "long":
+                max_tokens = 2000
+            else:
+                max_tokens = 1200
 
         # Merge default and task config, task config overrides default
         return {
@@ -129,7 +129,8 @@ class Settings:
             "max_tokens": max_tokens,
             "pregenerate": ai_cfg.get("pregenerate", False),
             "stream": ai_cfg.get("stream", True),
-            "use_reasoning": task_cfg.get("use_reasoning") if task_cfg.get("use_reasoning") is not None else True
+            "use_reasoning": task_cfg.get("use_reasoning") if task_cfg.get("use_reasoning") is not None else True,
+            "reasoning_disabler": task_cfg.get("reasoning_disabler") or default_cfg.get("reasoning_disabler") or "auto"
         }
 
     def save(self):
