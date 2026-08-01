@@ -203,6 +203,11 @@ const elements = {
     submitOpmlBtn: document.getElementById('submit-opml-btn'),
     fileUploadLabel: document.getElementById('file-upload-label'),
     
+    feedInfoBar: document.getElementById('feed-info-bar'),
+    feedUrlLink: document.getElementById('feed-url-link'),
+    feedUrlText: document.getElementById('feed-url-text'),
+    copyFeedUrlBtn: document.getElementById('copy-feed-url-btn'),
+    
     // Mobile Back Buttons
     mobileBackToFeeds: document.getElementById('mobile-back-to-feeds'),
     mobileBackToEntries: document.getElementById('mobile-back-to-entries'),
@@ -502,6 +507,23 @@ function initEventListeners() {
     }
     if (elements.btnBatchExportNotes) {
         elements.btnBatchExportNotes.addEventListener('click', () => exportSelectedNotes());
+    }
+    
+    if (elements.copyFeedUrlBtn) {
+        elements.copyFeedUrlBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const url = elements.copyFeedUrlBtn.dataset.url || elements.feedUrlLink.href;
+            if (url && url !== '#') {
+                navigator.clipboard.writeText(url).then(() => {
+                    const labelSpan = elements.copyFeedUrlBtn.querySelector('span');
+                    const originalText = labelSpan ? labelSpan.textContent : '复制';
+                    if (labelSpan) labelSpan.textContent = '已复制!';
+                    setTimeout(() => {
+                        if (labelSpan) labelSpan.textContent = originalText;
+                    }, 1500);
+                });
+            }
+        });
     }
     
     if (elements.clearChatBtn) {
@@ -1243,7 +1265,7 @@ function renderFeedsTree() {
             <span class="drag-handle" title="按住拖动排序">⋮⋮</span>
             <span class="toggle-icon">▶</span>
             <span class="feed-icon">📰</span>
-            <span class="feed-title-text" title="${feed.title}">${feed.title}</span>
+            <span class="feed-title-text" title="${escapeHTML(feed.title)}\nRSS: ${escapeHTML(feed.url)}">${escapeHTML(feed.title)}</span>
             ${feed.unread_count > 0 ? `<span class="unread-badge">${feed.unread_count}</span>` : ''}
         `;
         
@@ -1420,6 +1442,7 @@ function selectGlobalUnread(isStartup = false) {
     if (elements.btnNotes) elements.btnNotes.classList.remove('active');
     
     elements.currentCategoryName.textContent = "所有未读";
+    if (elements.feedInfoBar) elements.feedInfoBar.style.display = 'none';
     loadUnreadEntries();
     
     // Mobile panel transition: only navigate to entries list if not starting up
@@ -1440,6 +1463,7 @@ function selectStarredView(isStartup = false) {
     if (elements.btnNotes) elements.btnNotes.classList.remove('active');
     
     elements.currentCategoryName.textContent = "我的收藏";
+    if (elements.feedInfoBar) elements.feedInfoBar.style.display = 'none';
     loadStarredEntries();
     
     if (isStartup !== true) {
@@ -1497,6 +1521,15 @@ async function selectFeed(feedId) {
     
     const feed = state.feeds.find(f => f.id === feedId);
     elements.currentCategoryName.textContent = feed ? feed.title : "订阅源";
+    
+    if (feed && feed.url && elements.feedInfoBar) {
+        elements.feedInfoBar.style.display = 'inline-flex';
+        elements.feedUrlLink.href = feed.url;
+        elements.feedUrlText.textContent = feed.url;
+        elements.copyFeedUrlBtn.dataset.url = feed.url;
+    } else if (elements.feedInfoBar) {
+        elements.feedInfoBar.style.display = 'none';
+    }
     
     loadFeedEntries(feedId);
     
@@ -1601,6 +1634,15 @@ function selectCategory(feedId, catId, catName) {
     
     const feed = state.feeds.find(f => f.id === feedId);
     elements.currentCategoryName.textContent = feed ? `${feed.title} › ${catName}` : catName;
+    
+    if (feed && feed.url && elements.feedInfoBar) {
+        elements.feedInfoBar.style.display = 'inline-flex';
+        elements.feedUrlLink.href = feed.url;
+        elements.feedUrlText.textContent = feed.url;
+        elements.copyFeedUrlBtn.dataset.url = feed.url;
+    } else if (elements.feedInfoBar) {
+        elements.feedInfoBar.style.display = 'none';
+    }
     
     loadCategoryEntries(catId);
     
@@ -3535,7 +3577,14 @@ async function loadAndRenderManageFeeds() {
             item.dataset.id = feed.id;
             
             item.innerHTML = `
-                <input type="text" class="manage-item-title-input" value="${escapeHTML(feed.title)}" title="${escapeHTML(feed.url)}" placeholder="订阅源名称">
+                <div class="manage-item-info" style="flex: 1; min-width: 0;">
+                    <input type="text" class="manage-item-title-input" value="${escapeHTML(feed.title)}" title="${escapeHTML(feed.url)}" placeholder="订阅源名称">
+                    <div class="manage-feed-url-row">
+                        <span class="manage-feed-url" title="${escapeHTML(feed.url)}">${escapeHTML(feed.url)}</span>
+                        <a href="${escapeHTML(feed.url)}" target="_blank" class="manage-url-action-btn" title="在新标签页中访问该 RSS 链接">🔗 访问</a>
+                        <button class="manage-url-action-btn copy-feed-item-url-btn" data-url="${escapeHTML(feed.url)}" title="复制 RSS 链接">📋 复制</button>
+                    </div>
+                </div>
                 <div class="manage-item-actions">
                     <label class="feed-switch" title="${feed.enabled ? '已启用抓取' : '已禁用抓取'}">
                         <input type="checkbox" class="feed-enabled-toggle" ${feed.enabled ? 'checked' : ''}>
@@ -3555,6 +3604,20 @@ async function loadAndRenderManageFeeds() {
                     </button>
                 </div>
             `;
+            
+            const copyUrlBtn = item.querySelector('.copy-feed-item-url-btn');
+            if (copyUrlBtn) {
+                copyUrlBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const url = copyUrlBtn.dataset.url;
+                    if (url) {
+                        navigator.clipboard.writeText(url).then(() => {
+                            copyUrlBtn.textContent = '✅ 已复制';
+                            setTimeout(() => { copyUrlBtn.textContent = '📋 复制'; }, 1500);
+                        });
+                    }
+                });
+            }
             
             const titleInput = item.querySelector('.manage-item-title-input');
             const enabledToggle = item.querySelector('.feed-enabled-toggle');

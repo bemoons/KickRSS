@@ -115,7 +115,19 @@
                     </button>
                     <div class="title-meta">
                         <h2 id="current-category-name" class="header-title">所有未读</h2>
-                        <span id="entries-count-label" class="header-subtitle">0 篇文章</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span id="entries-count-label" class="header-subtitle">0 篇文章</span>
+                            <div id="feed-info-bar" class="feed-info-bar" style="display: none;">
+                                <a id="feed-url-link" class="feed-url-btn" href="#" target="_blank" title="在新标签页中打开 RSS 订阅源地址">
+                                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                                    <span id="feed-url-text" class="feed-url-text">RSS 链接</span>
+                                </a>
+                                <button id="copy-feed-url-btn" class="feed-url-btn" title="复制 RSS 订阅源地址">
+                                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                    <span>复制链接</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 

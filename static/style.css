@@ -3073,5 +3073,71 @@ body.light-theme .undo-toast {
     border: 0;
 }
 
+/* Feed URL info and action buttons */
+.feed-info-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 6px;
+}
+.feed-url-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+    background: var(--bg-hover);
+    border: 1px solid var(--border-color);
+    padding: 2px 8px;
+    border-radius: 6px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    max-width: 220px;
+    line-height: 1.4;
+}
+.feed-url-btn:hover {
+    color: var(--accent-color);
+    border-color: var(--accent-color);
+    background: var(--bg-card);
+}
+.feed-url-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 150px;
+}
+.manage-feed-url-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+.manage-feed-url {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 320px;
+    opacity: 0.85;
+}
+.manage-url-action-btn {
+    background: transparent;
+    border: none;
+    color: var(--accent-color);
+    cursor: pointer;
+    font-size: 11px;
+    text-decoration: none;
+    padding: 0 4px;
+    border-radius: 4px;
+    transition: opacity 0.2s;
+}
+.manage-url-action-btn:hover {
+    text-decoration: underline;
+    opacity: 0.8;
+}
+
+
 
 

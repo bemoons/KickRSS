@@ -293,35 +293,33 @@ def get_summary_messages(
         length_desc = f"proportional summary targeting approximately {target_chars} Chinese characters (around 1/10 of the clean text length)"
         
         # Structure guidelines based on target length
-        if target_chars >= 600:
+        # Structure guidelines based on target length
+        if target_chars >= 400:
             structure_advice = (
-                f"- For this length ({target_chars} characters), write a highly detailed, multi-paragraph, and structured summary. "
-                "Break down the content into sections such as: Background/Context, Core Arguments/Key Points (explained with detail and evidence), Key Data/Findings, and Implications/Conclusions. "
-                "Include specific examples, names, and numbers from the text to ensure depth and meet the length requirement."
+                f"- For this length ({target_chars} characters), write a structured summary containing 4-6 informative bullet points. "
+                "Be concise, clear, and highlight key takeaways without fluff."
             )
             cn_structure_advice = (
-                f"针对当前较长的目标字数（大约 {target_chars} 字），你必须撰写一份结构清晰、内容饱满的深度长摘要。部分观点需要展开论述，"
-                "请分成多个段落进行详细论述，包含：背景与前言、核心观点与详细论据展开、关键数据或案例细节、总结与影响。请多写细节、逻辑展开，严禁三言两语草草了事，以确保字数足够饱满。"
+                f"针对当前目标字数（大约 {target_chars} 字），请撰写 4-6 个高度凝练的核心要点。表述需客观精炼，严禁赘述或盲目扩写。"
             )
-        elif target_chars >= 300:
+        elif target_chars >= 250:
             structure_advice = (
-                f"- For this length ({target_chars} characters), write a detailed summary containing 2-3 structured paragraphs or 5-8 detailed bullet points. "
-                "Ensure core takeaways and their supporting points are fully explained."
+                f"- For this length ({target_chars} characters), write a concise summary containing 3-5 bullet points."
             )
             cn_structure_advice = (
-                f"针对当前中等目标字数（大约 {target_chars} 字），请撰写 2-3 个结构完整的段落，或者 5-8 个含有详细解释的要点。确保把核心事实、论据和结论表述清楚。"
+                f"针对当前目标字数（大约 {target_chars} 字），请撰写 3-5 个精炼核心要点。"
             )
         else:
             structure_advice = (
-                f"- For this length ({target_chars} characters), write a concise summary containing 1-2 paragraphs or 3-5 bullet points."
+                f"- For this length ({target_chars} characters), write a brief summary containing 2-3 bullet points."
             )
             cn_structure_advice = (
-                f"针对当前简短的目标字数（大约 {target_chars} 字），请撰写 1-2 个精炼的段落，或者 3-5 个核心要点。"
+                f"针对当前简短的目标字数（大约 {target_chars} 字），请撰写 2-3 个极简核心要点。"
             )
 
         rule_desc = (
             f"The summary should be high-quality, cover key takeaways, and strictly target approximately {target_chars} Chinese characters.\n"
-            f"- CRITICAL: The generated summary MUST contain around {target_chars} Chinese characters. DO NOT make it too short. The target length is strictly {target_chars} characters.\n"
+            f"- CRITICAL: The generated summary MUST target around {target_chars} Chinese characters and MUST NOT exceed {int(target_chars * 1.2)} characters.\n"
             f"- {structure_advice}"
         )
     elif length == "short":
@@ -358,8 +356,8 @@ def get_summary_messages(
             )
             if is_numeric_length:
                 lang_rule += (
-                    f"\n- 必须写满大约 {target_chars} 个汉字（字数范围必须严格控制在 {int(target_chars * 0.9)} 到 {int(target_chars * 1.15)} 字之间）。\n"
-                    f"- 这是字数的硬性指令，请把观点铺开、细节写饱满，绝对不能偷懒缩短！\n"
+                    f"\n- 【字数硬性上限】：摘要总字数必须控制在大约 {target_chars} 个汉字左右（建议控制在 {int(target_chars * 0.8)} 到 {int(target_chars * 1.15)} 字以内），绝对严禁超过 {int(target_chars * 1.2)} 字！\n"
+                    f"- 请做到言简意赅、高度提炼，切勿冗长赘述。\n"
                     f"- 编写要求：{cn_structure_advice}"
                 )
             reminder = f"\n\nReminder: You MUST write the SUMMARY in {eng_name} ({local_name}). (提示：请务必且只能使用 {chn_name} / {local_name} 撰写摘要。)"

@@ -191,7 +191,7 @@ def get_entry_summary(entry_id: int, stream: Optional[bool] = None, force: Optio
 
     # Estimate clean text length and decide dynamic summary length
     clean_char_count = ai.estimate_clean_text_length(ft_text)
-    target_chars = min(max(int(clean_char_count * 0.1), 100), 900)
+    target_chars = min(max(int(clean_char_count * 0.1), 100), 500)
     dynamic_length = target_chars
 
     ai_cfg = settings.get_ai_config("summary", summary_length=str(dynamic_length))
