@@ -1520,15 +1520,10 @@ async function selectFeed(feedId) {
     renderFeedsTree();
     
     const feed = state.feeds.find(f => f.id === feedId);
-    elements.currentCategoryName.textContent = feed ? feed.title : "订阅源";
-    
-    if (feed && feed.url && elements.feedInfoBar) {
-        elements.feedInfoBar.style.display = 'inline-flex';
-        elements.feedUrlLink.href = feed.url;
-        elements.feedUrlText.textContent = feed.url;
-        elements.copyFeedUrlBtn.dataset.url = feed.url;
-    } else if (elements.feedInfoBar) {
-        elements.feedInfoBar.style.display = 'none';
+    if (feed && feed.url) {
+        elements.currentCategoryName.innerHTML = `<a href="${escapeHTML(feed.url)}" target="_blank" class="header-title-link" title="在新标签页中打开 RSS 订阅链接&#10;${escapeHTML(feed.url)}">${escapeHTML(feed.title)} <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-left: 2px; opacity: 0.6;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>`;
+    } else {
+        elements.currentCategoryName.textContent = feed ? feed.title : "订阅源";
     }
     
     loadFeedEntries(feedId);
@@ -1633,15 +1628,10 @@ function selectCategory(feedId, catId, catName) {
     });
     
     const feed = state.feeds.find(f => f.id === feedId);
-    elements.currentCategoryName.textContent = feed ? `${feed.title} › ${catName}` : catName;
-    
-    if (feed && feed.url && elements.feedInfoBar) {
-        elements.feedInfoBar.style.display = 'inline-flex';
-        elements.feedUrlLink.href = feed.url;
-        elements.feedUrlText.textContent = feed.url;
-        elements.copyFeedUrlBtn.dataset.url = feed.url;
-    } else if (elements.feedInfoBar) {
-        elements.feedInfoBar.style.display = 'none';
+    if (feed && feed.url) {
+        elements.currentCategoryName.innerHTML = `<a href="${escapeHTML(feed.url)}" target="_blank" class="header-title-link" title="在新标签页中打开 RSS 订阅链接&#10;${escapeHTML(feed.url)}">${escapeHTML(feed.title)}</a> › ${escapeHTML(catName)}`;
+    } else {
+        elements.currentCategoryName.textContent = feed ? `${feed.title} › ${catName}` : catName;
     }
     
     loadCategoryEntries(catId);

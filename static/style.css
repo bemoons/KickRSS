@@ -3073,6 +3073,21 @@ body.light-theme .undo-toast {
     border: 0;
 }
 
+/* Header Feed Title Link */
+.header-title-link {
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.2s ease, opacity 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.header-title-link:hover {
+    color: var(--accent-color);
+    text-decoration: underline;
+    opacity: 0.9;
+}
+
 /* Feed URL info and action buttons */
 .feed-info-bar {
     display: inline-flex;
