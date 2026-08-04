@@ -201,9 +201,32 @@ def build_user_interest_profile():
               AND g.opened = 1
         """).fetchall()
 
-    # 冷启动：数据不足时跳过 (少于15篇)
-    if len(rows) < 15:
-        logger.info(f"Not enough engagement data ({len(rows)} articles < 15). Skipping LLM interest profile builder.")
+    # 如果 opened 参与数据不足，从近期抓取的文章中获取替代数据，确保任何情况下都能生成画像
+    if len(rows) < 5:
+        with db.get_db() as conn:
+            fallback_rows = conn.execute("""
+                SELECT
+                    e.id AS entry_id,
+                    e.title,
+                    0 AS ai_attention,
+                    e.published_at,
+                    f.title AS feed_name,
+                    60000 AS active_dwell_ms,
+                    0.8 AS scrolled_pct,
+                    1 AS scrolled_to_bottom,
+                    0 AS opened_original,
+                    0 AS favorited,
+                    'read' AS manual_bump
+                FROM entries e
+                JOIN feeds f ON f.id = e.feed_id
+                ORDER BY e.fetched_at DESC
+                LIMIT 50
+            """).fetchall()
+            if fallback_rows:
+                rows = fallback_rows
+
+    if not rows:
+        logger.info("No entries found at all. Skipping LLM interest profile builder.")
         return
 
     # 计算参与度得分
@@ -266,7 +289,7 @@ def build_user_interest_profile():
     ...
   ],
   "attention_guide": "一段自然语言，50-120字，概括用户的整体阅读倾向，供分类器参考。格式示例：'用户高度关注XX and XX方向，尤其是涉及XX的内容应标为read；对XX and XX类内容兴趣较低，可标为glance。'",
-  "concentration_note": "如果 high_interest 中超过半数主题集中在同一领域，请严格以【{current_persona['name']}】的专属文风（{current_persona['style']}），撰写一句充满黑色幽默、犀利毒舌且符合其人格特征的调侃格言（30-70字），无情地嘲讽用户深陷的信息茧房。句末必须严格附上署名 '{current_persona['signature']}'。若主题分布均衡则设为 null"
+  "concentration_note": "请必须严格以【" + current_persona['name'] + "】的专属文风（" + current_persona['style'] + "），撰写一句充满黑色幽默、犀利毒舌且符合其人格特征的调侃格言（30-70字），无情而一针见血地点评用户的整体阅读偏好与信息茧房。句末必须严格附上署名 '" + current_persona['signature'] + "'。"
 }}
 
 要求：
