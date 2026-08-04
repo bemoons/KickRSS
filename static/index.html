@@ -655,7 +655,10 @@
                 <h3 style="margin: 0; font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
                     📊 <span id="label-profile-title">我的阅读画像</span>
                 </h3>
-                <button class="close-modal-btn icon-btn" id="close-profile-modal-btn">&times;</button>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button id="rebuild-profile-btn" class="modal-btn secondary" style="font-size: 11px; padding: 4px 10px; border-radius: 6px;" title="重新调用大模型分析近30天阅读记录并更新画像">🔄 重新生成画像</button>
+                    <button class="close-modal-btn icon-btn" id="close-profile-modal-btn">&times;</button>
+                </div>
             </div>
             <div class="modal-body" style="padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px;">
                 <!-- Cold Start / Disabled View -->

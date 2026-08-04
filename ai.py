@@ -495,14 +495,14 @@ def generate_summary_stream(
                 try:
                     data = json.loads(data_str)
                     delta = data["choices"][0]["delta"]
-                    text = delta.get("content")
+                    text = delta.get("content") or delta.get("reasoning_content") or delta.get("reasoning")
                     if text is not None:
                         filtered = filter_obj.filter(text)
                         if filtered:
                             buffer += filtered
                             if not in_summary and "SUMMARY:" in buffer:
                                 parts = buffer.split("SUMMARY:", 1)
-                                yield_text = parts[1].strip()
+                                yield_text = parts[1]
                                 in_summary = True
                                 if yield_text:
                                     yield yield_text
@@ -518,9 +518,11 @@ def generate_summary_stream(
                     yield flushed
                 else:
                     buffer += flushed
-                    if "SUMMARY:" in buffer:
-                        parts = buffer.split("SUMMARY:", 1)
-                        yield parts[1].strip()
+                    
+            if not in_summary:
+                clean_buffer = buffer.replace("SUMMARY:", "").strip()
+                if clean_buffer:
+                    yield clean_buffer
 
     try:
         try:

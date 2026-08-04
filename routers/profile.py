@@ -74,3 +74,15 @@ def get_topic_detail(topic: str):
         if not detail:
             raise HTTPException(status_code=404, detail="Topic not found or no data available")
         return detail
+
+@router.post("/profile/generate")
+def generate_interest_profile():
+    if not settings.interest_profile_enabled:
+        raise HTTPException(status_code=400, detail="Personalization profile is disabled")
+    try:
+        from maintenance import build_user_interest_profile
+        build_user_interest_profile()
+        return {"status": "success", "message": "阅读画像更新完成"}
+    except Exception as e:
+        logger.error(f"Failed to generate user interest profile: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
