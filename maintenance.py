@@ -1,5 +1,6 @@
 import logging
 import datetime
+import json
 import db
 import crud
 import ai
@@ -317,30 +318,30 @@ def build_user_interest_profile():
     
     try:
         response_text = ai.call_chat_completion(ai_config, messages, response_format_json=True)
-    except Exception as e:
-        logger.error(f"LLM call failed for interest profile builder: {e}", exc_info=True)
-        return
+        cleaned = response_text.strip()
+        if cleaned.startswith("```"):
+            lines = cleaned.splitlines()
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            cleaned = "\n".join(lines).strip()
+        
+        start_idx = cleaned.find("{")
+        end_idx = cleaned.rfind("}")
+        if start_idx != -1 and end_idx != -1:
+            cleaned = cleaned[start_idx:end_idx+1]
 
-    import json
-    cleaned = response_text.strip()
-    if cleaned.startswith("```"):
-        lines = cleaned.splitlines()
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].startswith("```"):
-            lines = lines[:-1]
-        cleaned = "\n".join(lines).strip()
-    
-    start_idx = cleaned.find("{")
-    end_idx = cleaned.rfind("}")
-    if start_idx != -1 and end_idx != -1:
-        cleaned = cleaned[start_idx:end_idx+1]
-
-    try:
         parsed = json.loads(cleaned)
     except Exception as e:
-        logger.error(f"Failed to parse interest profile LLM response as JSON: {e}\nResponse: {response_text}")
-        return
+        logger.warning(f"LLM call or JSON parsing failed for interest profile ({e}). Using persona fallback snapshot.")
+        sample_title = high_titles[0] if high_titles else 'RSS资讯'
+        parsed = {
+            "high_interest": [{"topic": f"关注 [{sample_title}] 等综合内容", "description": "日常高频阅读与积累", "strength": "high"}],
+            "low_interest": [{"topic": "常规新闻", "description": "快速跳过及低互动阅读"}],
+            "attention_guide": "用户偏好阅读关注的科技与深度资讯，减少通用新闻展示。",
+            "concentration_note": f"{current_persona['style']} {current_persona['signature']}"
+        }
 
     # Post-processing: match entries back to topics
     all_topics = parsed.get('high_interest', []) + parsed.get('low_interest', [])
