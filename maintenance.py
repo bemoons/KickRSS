@@ -232,14 +232,18 @@ def build_user_interest_profile():
     # 计算参与度得分
     def engagement_score(row):
         score = 0
-        if row['manual_bump'] == 'read':   score += 5
-        if row['manual_bump'] == 'glance': score -= 3
+        manual_bump = row['manual_bump'] if row['manual_bump'] else ''
+        if manual_bump == 'read':   score += 5
+        if manual_bump == 'glance': score -= 3
         if row['favorited']:               score += 4
         if row['opened_original']:         score += 3
         if row['scrolled_to_bottom']:      score += 2
         
-        score += min(row['active_dwell_ms'] / 60000.0, 2.0)
-        score += row['scrolled_pct'] * 1.5
+        dwell = row['active_dwell_ms'] or 0
+        scrolled = row['scrolled_pct'] or 0.0
+        
+        score += min(dwell / 60000.0, 2.0)
+        score += scrolled * 1.5
         return score
 
     scored = [(engagement_score(r), r) for r in rows]
@@ -247,6 +251,8 @@ def build_user_interest_profile():
 
     high = [r for s, r in scored if s >= 4]
     low  = [r for s, r in scored if s <= 0]
+    if not high and scored:
+        high = [r for s, r in scored[:10]]
 
     # 取标题列表（各最多 80 条，避免 prompt 过长）
     high_titles = [f"[{r['feed_name']}] {r['title']}" for r in high[:80]]
@@ -316,8 +322,22 @@ def build_user_interest_profile():
         return
 
     import json
+    cleaned = response_text.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+    
+    start_idx = cleaned.find("{")
+    end_idx = cleaned.rfind("}")
+    if start_idx != -1 and end_idx != -1:
+        cleaned = cleaned[start_idx:end_idx+1]
+
     try:
-        parsed = json.loads(response_text)
+        parsed = json.loads(cleaned)
     except Exception as e:
         logger.error(f"Failed to parse interest profile LLM response as JSON: {e}\nResponse: {response_text}")
         return
