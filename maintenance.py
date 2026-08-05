@@ -253,7 +253,7 @@ def build_user_interest_profile():
     low_titles  = [f"[{r['feed_name']}] {r['title']}" for r in low[:80]]
 
     import datetime
-    day_ordinal = datetime.date.today().toordinal()
+    day_ordinal = datetime.date.today().timetuple().tm_yday
     
     personas = [
         {"name": "奥斯卡·王尔德 (Oscar Wilde)", "signature": "--- 0sc4r W1LD3", "style": "唯美悖论、傲娇冷艳：“一个人摆脱无知的唯一方式，就是用机器的智慧来替代自己的思考...”"},

@@ -13,22 +13,9 @@ def get_interest_profile():
     if not settings.interest_profile_enabled:
         return {"status": "disabled"}
         
-    import datetime
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-    
     with db.get_db() as conn:
         cursor = conn.cursor()
         latest = crud.get_latest_user_interest(conn)
-        
-        # 只要今天的画像快照尚未生成，就在用户打开查看时【完全被动、无需干预】地自动计算并生成今日最新画像
-        if not latest or latest["snapshot_date"] != today_str:
-            try:
-                from maintenance import build_user_interest_profile
-                build_user_interest_profile()
-                latest = crud.get_latest_user_interest(conn)
-            except Exception as e:
-                logger.error(f"Auto-generating daily interest profile failed: {e}", exc_info=True)
-
         if not latest:
             return {
                 "status": "cold_start",
