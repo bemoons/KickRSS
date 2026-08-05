@@ -343,6 +343,14 @@ def build_user_interest_profile():
             "concentration_note": f"{current_persona['style']} {current_persona['signature']}"
         }
 
+    # Post-processing: enforce current_persona signature on concentration_note
+    note = parsed.get("concentration_note", "")
+    if note:
+        import re
+        note = re.sub(r'[\s\n]*[—\-]{2,}[^—\-]+$', '', note).strip()
+        note = f"{note} {current_persona['signature']}"
+        parsed["concentration_note"] = note
+
     # Post-processing: match entries back to topics
     all_topics = parsed.get('high_interest', []) + parsed.get('low_interest', [])
     for topic_item in all_topics:
