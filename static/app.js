@@ -1045,28 +1045,6 @@ function initEventListeners() {
     if (elements.showProfileBtn) {
         elements.showProfileBtn.addEventListener('click', showProfileModal);
     }
-    const rebuildBtn = document.getElementById('rebuild-profile-btn');
-    if (rebuildBtn) {
-        rebuildBtn.addEventListener('click', async () => {
-            rebuildBtn.disabled = true;
-            rebuildBtn.textContent = '⏳ 分析中...';
-            try {
-                const res = await fetch('/profile/generate', { method: 'POST' });
-                if (res.ok) {
-                    await showProfileModal();
-                } else {
-                    const errData = await res.json();
-                    alert('生成画像失败: ' + (errData.detail || '未知错误'));
-                }
-            } catch (e) {
-                console.error('Failed to rebuild profile:', e);
-                alert('生成画像请求失败');
-            } finally {
-                rebuildBtn.disabled = false;
-                rebuildBtn.textContent = '🔄 重新生成画像';
-            }
-        });
-    }
     if (elements.closeProfileDetailBtn) {
         elements.closeProfileDetailBtn.addEventListener('click', () => {
             if (elements.profileDetailPanel) elements.profileDetailPanel.classList.add('hidden');

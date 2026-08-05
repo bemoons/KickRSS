@@ -13,9 +13,22 @@ def get_interest_profile():
     if not settings.interest_profile_enabled:
         return {"status": "disabled"}
         
+    import datetime
+    today_str = datetime.date.today().strftime("%Y-%m-%d")
+    
     with db.get_db() as conn:
         cursor = conn.cursor()
         latest = crud.get_latest_user_interest(conn)
+        
+        # 只要今天的画像快照尚未生成，就在用户打开查看时【完全被动、无需干预】地自动计算并生成今日最新画像
+        if not latest or latest["snapshot_date"] != today_str:
+            try:
+                from maintenance import build_user_interest_profile
+                build_user_interest_profile()
+                latest = crud.get_latest_user_interest(conn)
+            except Exception as e:
+                logger.error(f"Auto-generating daily interest profile failed: {e}", exc_info=True)
+
         if not latest:
             return {
                 "status": "cold_start",
@@ -28,7 +41,6 @@ def get_interest_profile():
             topics = {"high_interest": [], "low_interest": [], "concentration_note": None}
             
         # Get token stats for the last 7 calendar days
-        import datetime
         token_stats = []
         today = datetime.date.today()
         for i in range(6, -1, -1):
@@ -74,15 +86,3 @@ def get_topic_detail(topic: str):
         if not detail:
             raise HTTPException(status_code=404, detail="Topic not found or no data available")
         return detail
-
-@router.post("/profile/generate")
-def generate_interest_profile():
-    if not settings.interest_profile_enabled:
-        raise HTTPException(status_code=400, detail="Personalization profile is disabled")
-    try:
-        from maintenance import build_user_interest_profile
-        build_user_interest_profile()
-        return {"status": "success", "message": "阅读画像更新完成"}
-    except Exception as e:
-        logger.error(f"Failed to generate user interest profile: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
