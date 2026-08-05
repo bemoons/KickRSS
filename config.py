@@ -89,7 +89,7 @@ class Settings:
 
     @property
     def interest_profile_enabled(self) -> bool:
-        return self.data.get("interest_profile_enabled", False)
+        return self.data.get("interest_profile_enabled", True)
 
     @property
     def access_password(self) -> str:

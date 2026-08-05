@@ -26,7 +26,7 @@ def get_settings() -> Dict[str, Any]:
         "ai_summary_length": ai_cfg.get("summary_length", "medium"),
         "ai_summary_lang": ai_cfg.get("summary_language", "auto"),
         "system_lang": settings.data.get("system_language", "zh"),
-        "interest_profile_enabled": settings.data.get("interest_profile_enabled", False),
+        "interest_profile_enabled": settings.data.get("interest_profile_enabled", True),
         
         "chat_base_url": chat_cfg.get("base_url") or "",
         "chat_api_key": chat_cfg.get("api_key") or "",
