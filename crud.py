@@ -127,9 +127,9 @@ def list_feeds(conn: sqlite3.Connection) -> List[sqlite3.Row]:
     # Return feeds with unread counts
     cursor.execute("""
         SELECT f.id, f.title, f.url, f.site_url, f.last_fetched_at, f.enabled, f.need_classification,
-               COALESCE(SUM(CASE WHEN e.is_read = 0 THEN 1 ELSE 0 END), 0) as unread_count
+               COUNT(e.id) as unread_count
         FROM feeds f
-        LEFT JOIN entries e ON e.feed_id = f.id
+        LEFT JOIN entries e ON e.feed_id = f.id AND e.is_read = 0
         GROUP BY f.id
     """)
     return cursor.fetchall()
@@ -138,9 +138,9 @@ def get_categories_for_feed(conn: sqlite3.Connection, feed_id: int) -> List[sqli
     cursor = conn.cursor()
     cursor.execute("""
         SELECT c.id, c.feed_id, c.name, c.is_default, c.created_at,
-               COALESCE(SUM(CASE WHEN e.is_read = 0 THEN 1 ELSE 0 END), 0) as unread_count
+               COUNT(e.id) as unread_count
         FROM categories c
-        LEFT JOIN entries e ON e.category_id = c.id
+        LEFT JOIN entries e ON e.category_id = c.id AND e.is_read = 0
         WHERE c.feed_id = ?
         GROUP BY c.id
     """, (feed_id,))
@@ -270,10 +270,14 @@ def save_entries(
                             INSERT INTO fulltext (entry_id, content, status, fetched_at, fetcher)
                             VALUES (?, ?, ?, ?, 'feed')
                         """, (existing_id, clean_content, status, now_str))
+                    if status == "ok" and "<video" not in new_content.lower() and "<iframe" not in new_content.lower():
+                        cursor.execute("UPDATE entries SET raw_content = '' WHERE id = ?", (existing_id,))
             continue
 
         raw_content = entry.raw_content or ""
         raw_content_len = len(raw_content)
+        content_lower = raw_content.lower()
+        has_video_embed = "<video" in content_lower or "<iframe" in content_lower
         
         # Decide fulltext_ready and likely_no_text
         if getattr(entry, "likely_no_text", 0) or getattr(entry, "fulltext_ready", 0):
@@ -281,10 +285,22 @@ def save_entries(
             fulltext_ready = entry.fulltext_ready
         else:
             fulltext_ready = 1 if raw_content_len >= min_chars else 0
-            content_lower = raw_content.lower()
             likely_no_text = 0
-            if raw_content_len < min_chars and ("<video" in content_lower or "<iframe" in content_lower):
+            if raw_content_len < min_chars and has_video_embed:
                 likely_no_text = 1
+
+        clean_content = ""
+        ft_status = ""
+        raw_to_save = raw_content
+        if fulltext_ready == 1:
+            if likely_no_text == 1:
+                if not has_video_embed:
+                    raw_to_save = ""
+            else:
+                clean_content = clean_html(raw_content)
+                ft_status = "ok" if len(clean_content) >= min_chars else "no_text"
+                if ft_status == "ok" and not has_video_embed:
+                    raw_to_save = ""
 
         # Insert entry
         cursor.execute("""
@@ -294,7 +310,7 @@ def save_entries(
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
         """, (
             feed_id, category_id, entry.guid, entry.title, entry.url, entry.author,
-            entry.published_at, now_str, raw_content, "skim", likely_no_text, fulltext_ready
+            entry.published_at, now_str, raw_to_save, "skim", likely_no_text, fulltext_ready
         ))
         
         entry_id = cursor.lastrowid
@@ -308,12 +324,10 @@ def save_entries(
                     VALUES (?, '此文章主要包含视频/多媒体内容，无正文可提取。请点击标题或右上角链接查看原始视频。', 'video', ?, 'feed')
                 """, (entry_id, now_str))
             else:
-                clean_content = clean_html(raw_content)
-                status = "ok" if len(clean_content) >= min_chars else "no_text"
                 cursor.execute("""
                     INSERT INTO fulltext (entry_id, content, status, fetched_at, fetcher)
                     VALUES (?, ?, ?, ?, 'feed')
-                """, (entry_id, clean_content, status, now_str))
+                """, (entry_id, clean_content, ft_status, now_str))
 
     return new_count
 
@@ -462,10 +476,11 @@ def update_entry_attention(conn: sqlite3.Connection, entry_id: int, attention: s
 def get_unclassified_entries(conn: sqlite3.Connection, feed_id: int) -> List[sqlite3.Row]:
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, title, raw_content 
-        FROM entries 
-        WHERE feed_id = ? AND classified_at IS NULL
-        ORDER BY published_at DESC
+        SELECT e.id, e.title, COALESCE(NULLIF(e.raw_content, ''), ft.content, '') as raw_content
+        FROM entries e
+        LEFT JOIN fulltext ft ON ft.entry_id = e.id
+        WHERE e.feed_id = ? AND e.classified_at IS NULL
+        ORDER BY e.published_at DESC
         LIMIT 100
     """, (feed_id,))
     return cursor.fetchall()
@@ -566,15 +581,32 @@ def save_fulltext(
     
     # 2. Update entries table setting fulltext_ready = 1 (and likely_no_text = 0 if status is ok)
     if status == "ok":
-        cursor.execute("""
-            UPDATE entries 
-            SET fulltext_ready = 1, likely_no_text = 0 
-            WHERE id = ?
-        """, (entry_id,))
+        if content and content.strip():
+            cursor.execute("""
+                UPDATE entries 
+                SET fulltext_ready = 1,
+                    likely_no_text = 0,
+                    raw_content = CASE
+                        WHEN lower(raw_content) LIKE '%<video%' OR lower(raw_content) LIKE '%<iframe%' THEN raw_content
+                        ELSE ''
+                    END
+                WHERE id = ?
+            """, (entry_id,))
+        else:
+            cursor.execute("""
+                UPDATE entries 
+                SET fulltext_ready = 1, likely_no_text = 0 
+                WHERE id = ?
+            """, (entry_id,))
     elif status == "video":
         cursor.execute("""
             UPDATE entries 
-            SET fulltext_ready = 1, likely_no_text = 1 
+            SET fulltext_ready = 1,
+                likely_no_text = 1,
+                raw_content = CASE
+                    WHEN lower(raw_content) LIKE '%<video%' OR lower(raw_content) LIKE '%<iframe%' THEN raw_content
+                    ELSE ''
+                END
             WHERE id = ?
         """, (entry_id,))
     else:
@@ -668,8 +700,8 @@ def search_entries(
     params = []
     for w in words:
         like_pat = f"%{w}%"
-        conditions.append("(e.title LIKE ? OR e.raw_content LIKE ? OR f.content LIKE ? OR cm.content LIKE ?)")
-        params.extend([like_pat, like_pat, like_pat, like_pat])
+        conditions.append("(e.title LIKE ? OR e.raw_content LIKE ? OR f.content LIKE ? OR s.content LIKE ? OR s.clickbait_note LIKE ? OR cm.content LIKE ?)")
+        params.extend([like_pat, like_pat, like_pat, like_pat, like_pat, like_pat])
         
     where_clause = " AND ".join(conditions)
     
@@ -679,6 +711,7 @@ def search_entries(
                    e.attention, e.likely_no_text, e.fulltext_ready, e.is_read, e.read_at, e.classified_at, e.is_starred
             FROM entries e
             LEFT JOIN fulltext f ON f.entry_id = e.id
+            LEFT JOIN summaries s ON s.entry_id = e.id
             LEFT JOIN chat_messages cm ON cm.entry_id = e.id
             WHERE e.is_read = 0 AND ({where_clause})
             ORDER BY e.published_at DESC, e.id DESC
@@ -690,6 +723,7 @@ def search_entries(
                    e.attention, e.likely_no_text, e.fulltext_ready, e.is_read, e.read_at, e.classified_at, e.is_starred
             FROM entries e
             LEFT JOIN fulltext f ON f.entry_id = e.id
+            LEFT JOIN summaries s ON s.entry_id = e.id
             LEFT JOIN chat_messages cm ON cm.entry_id = e.id
             WHERE ({where_clause})
             ORDER BY e.published_at DESC, e.id DESC

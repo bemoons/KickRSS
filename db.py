@@ -53,6 +53,11 @@ CREATE TABLE IF NOT EXISTS entries (
 
 CREATE INDEX IF NOT EXISTS idx_entries_cat ON entries(category_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_entries_feed_unread ON entries(feed_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_entries_feed_read_pub ON entries(feed_id, is_read, published_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_entries_feed_pub ON entries(feed_id, published_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_entries_cat_read_pub ON entries(category_id, is_read, published_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_entries_cat_pub ON entries(category_id, published_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_entries_unread_pub ON entries(is_read, published_at DESC, id DESC);
 
 -- 懒加载:全文缓存
 CREATE TABLE IF NOT EXISTS fulltext (
@@ -181,6 +186,11 @@ def init_db(db_path: str = None):
         # Create index now that is_starred is guaranteed to exist
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_entries_starred ON entries(is_starred);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_entries_fetched_at ON entries(fetched_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_entries_feed_read_pub ON entries(feed_id, is_read, published_at DESC, id DESC);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_entries_feed_pub ON entries(feed_id, published_at DESC, id DESC);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_entries_cat_read_pub ON entries(category_id, is_read, published_at DESC, id DESC);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_entries_cat_pub ON entries(category_id, published_at DESC, id DESC);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_entries_unread_pub ON entries(is_read, published_at DESC, id DESC);")
         
         # Check and migrate feeds table
         cursor.execute("PRAGMA table_info(feeds);")
