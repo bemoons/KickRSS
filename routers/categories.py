@@ -30,7 +30,7 @@ def get_category_entries(
             limit=limit, 
             offset=offset
         )
-        return [dict(r) for r in rows]
+        return crud.enrich_entries_with_preview(conn, [dict(r) for r in rows])
 
 @router.post("/categories/{category_id}/read")
 def read_category(category_id: int):

@@ -53,7 +53,7 @@ def get_feed_entries(
             d = dict(r)
             d["feed_title"] = feed_title
             result.append(d)
-        return result
+        return crud.enrich_entries_with_preview(conn, result)
 
 @router.get("/search")
 def search_entries(
@@ -75,7 +75,7 @@ def search_entries(
                 feeds_cache[feed_id] = feed["title"] if feed else "Unknown"
             d["feed_title"] = feeds_cache[feed_id]
             result.append(d)
-        return result
+        return crud.enrich_entries_with_preview(conn, result)
 
 
 @router.get("/entries/{entry_id}/fulltext")
@@ -104,7 +104,7 @@ def get_unread_entries_api(
 ):
     with db.get_db() as conn:
         rows = crud.get_unread_entries(conn, limit=limit, offset=offset)
-        return [dict(r) for r in rows]
+        return crud.enrich_entries_with_preview(conn, [dict(r) for r in rows])
 
 @router.get("/entries/starred")
 def get_starred_entries(
@@ -129,7 +129,7 @@ def get_starred_entries(
                 feeds_cache[feed_id] = feed["title"] if feed else "Unknown"
             d["feed_title"] = feeds_cache[feed_id]
             result.append(d)
-        return result
+        return crud.enrich_entries_with_preview(conn, result)
 
 @router.get("/entries/starred/count")
 def get_starred_count():

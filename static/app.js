@@ -83,7 +83,12 @@ const state = {
     profileTrendView: 'week', // 'week' or 'month'
     interestProfileData: null,
     backToFeedsFromDetail: false,
-    loadSessionId: 0
+    loadSessionId: 0,
+
+    // Instagram Flow Mode state
+    viewMode: window.localStorage.getItem('KICKRSS_VIEW_MODE') || 'list', // 'list' or 'flow'
+    flowAutoSummary: window.localStorage.getItem('KICKRSS_FLOW_AUTO_SUMMARY') === 'true',
+    flowScrollRead: window.localStorage.getItem('KICKRSS_FLOW_SCROLL_READ') !== 'false'
 };
 
 let currentEngagement = null;
@@ -98,6 +103,14 @@ const elements = {
     entriesCountLabel: document.getElementById('entries-count-label'),
     filterUnreadToggle: document.getElementById('filter-unread-toggle'),
     markAllReadBtn: document.getElementById('mark-all-read-btn'),
+    viewModeToggleBtn: document.getElementById('view-mode-toggle-btn'),
+    viewModeIcon: document.getElementById('view-mode-icon'),
+    viewModeText: document.getElementById('view-mode-text'),
+    flowNavContainer: document.getElementById('flow-nav-container'),
+    flowStoriesBar: document.getElementById('flow-stories-bar'),
+    flowCategoriesBar: document.getElementById('flow-categories-bar'),
+    flowAutoSummaryToggle: document.getElementById('flow-auto-summary-toggle'),
+    flowScrollReadToggle: document.getElementById('flow-scroll-read-toggle'),
     searchInput: document.getElementById('search-input'),
     
     // Detail View Elements
@@ -253,6 +266,7 @@ const elements = {
 // ----------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
+    updateViewModeUI();
     initEventListeners();
     loadSettingsOnStartup().then(async () => {
         // Check if there is a saved navigation state
@@ -340,6 +354,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         selectGlobalUnread(true);
+        if (state.viewMode === 'flow') {
+            document.body.classList.add('show-entries');
+        }
     });
     initResizers();
     initChatDrawer();
@@ -405,6 +422,9 @@ function initEventListeners() {
     // Infinite Scroll for Entries Column
     if (elements.entriesScrollContainer) {
         elements.entriesScrollContainer.addEventListener('scroll', () => {
+            if (state.viewMode === 'flow' && state.flowScrollRead) {
+                handleFlowScrollPastRead();
+            }
             if (state.isLoadingMore || !state.hasMoreEntries) return;
             
             const threshold = 100; // px from bottom to trigger fetch
@@ -415,6 +435,35 @@ function initEventListeners() {
             if (scrollHeight - (scrollTop + clientHeight) < threshold) {
                 loadMoreEntries();
             }
+        });
+    }
+
+    // View Mode Toggle (Traditional List vs Instagram Flow)
+    if (elements.viewModeToggleBtn) {
+        elements.viewModeToggleBtn.addEventListener('click', () => {
+            state.viewMode = state.viewMode === 'flow' ? 'list' : 'flow';
+            window.localStorage.setItem('KICKRSS_VIEW_MODE', state.viewMode);
+            updateViewModeUI();
+            refreshEntriesList();
+        });
+    }
+
+    if (elements.flowAutoSummaryToggle) {
+        elements.flowAutoSummaryToggle.checked = state.flowAutoSummary;
+        elements.flowAutoSummaryToggle.addEventListener('change', (e) => {
+            state.flowAutoSummary = e.target.checked;
+            window.localStorage.setItem('KICKRSS_FLOW_AUTO_SUMMARY', state.flowAutoSummary ? 'true' : 'false');
+            if (!state.flowAutoSummary) {
+                clearAllFlowDwellTimers();
+            }
+        });
+    }
+
+    if (elements.flowScrollReadToggle) {
+        elements.flowScrollReadToggle.checked = state.flowScrollRead;
+        elements.flowScrollReadToggle.addEventListener('change', (e) => {
+            state.flowScrollRead = e.target.checked;
+            window.localStorage.setItem('KICKRSS_FLOW_SCROLL_READ', state.flowScrollRead ? 'true' : 'false');
         });
     }
 
@@ -1127,6 +1176,9 @@ async function loadFeeds() {
         }
         
         renderFeedsTree();
+        if (state.viewMode === 'flow') {
+            renderFlowStoriesBar();
+        }
         
         // Refresh starred count
         loadStarredCount();
@@ -1724,8 +1776,8 @@ async function loadCategoryEntries(catId, appendMode = false) {
 function updateEntriesCountLabel() {
     if (!elements.entriesCountLabel) return;
     
-    const totalCards = elements.entriesList.querySelectorAll('.entry-card').length;
-    const unreadCount = elements.entriesList.querySelectorAll('.entry-card.unread').length;
+    const totalCards = elements.entriesList.querySelectorAll('.entry-card, .flow-card').length;
+    const unreadCount = elements.entriesList.querySelectorAll('.entry-card.unread, .flow-card.unread').length;
     const lang = state.systemLang || 'zh';
     
     if (state.activeView === 'notes') {
@@ -1741,8 +1793,14 @@ function updateEntriesCountLabel() {
 
 function refreshEntriesList(appendMode = false, newAddedData = []) {
     toggleNotesHeaderControls(state.activeView === 'notes');
+    const isFlowMode = state.viewMode === 'flow' && state.activeView !== 'notes';
+    elements.entriesList.classList.toggle('flow-mode-list', isFlowMode);
+    if (state.viewMode === 'flow') {
+        renderFlowStoriesBar();
+    }
     
     if (!appendMode) {
+        clearAllFlowDwellTimers();
         elements.entriesList.innerHTML = '';
         
         // Sort entries by published_at descending (newest first)
@@ -1788,6 +1846,13 @@ function refreshEntriesList(appendMode = false, newAddedData = []) {
     entriesToRender.forEach(entry => {
         // Skip read entries if filterUnreadOnly is enabled and not in search/starred/notes view
         if (appendMode && state.filterUnreadOnly && state.activeView !== 'search' && state.activeView !== 'starred' && state.activeView !== 'notes' && entry.is_read === 1) {
+            return;
+        }
+        
+        if (isFlowMode) {
+            const flowCard = createFlowEntryCard(entry);
+            elements.entriesList.appendChild(flowCard);
+            observeFlowCard(flowCard, entry);
             return;
         }
         
@@ -7718,3 +7783,638 @@ window.showPasswordGate = function() {
         if (e.key === 'Enter') handleUnlock();
     });
 };
+
+// ----------------------------------------------------
+// INSTAGRAM FLOW MODE IMPLEMENTATION
+// ----------------------------------------------------
+let flowObserver = null;
+const flowDwellTimers = new Map();
+const flowActiveStreams = new Map();
+const flowCategoriesCache = new Map();
+const flowScrollReadQueue = new Set();
+let flowScrollReadFlushTimer = null;
+
+function updateViewModeUI() {
+    const isFlow = state.viewMode === 'flow';
+    const isEn = (state.systemLang || 'zh') === 'en';
+
+    if (elements.viewModeToggleBtn) {
+        elements.viewModeToggleBtn.classList.toggle('flow-active', isFlow);
+    }
+    if (elements.viewModeIcon) {
+        elements.viewModeIcon.textContent = isFlow ? '📱' : '☰';
+    }
+    if (elements.viewModeText) {
+        elements.viewModeText.textContent = isFlow
+            ? (isEn ? 'Flow' : '卡片流')
+            : (isEn ? 'List' : '列表');
+    }
+    if (elements.flowNavContainer) {
+        elements.flowNavContainer.classList.toggle('hidden', !isFlow);
+    }
+    if (elements.flowAutoSummaryToggle) {
+        elements.flowAutoSummaryToggle.checked = state.flowAutoSummary;
+    }
+    if (elements.flowScrollReadToggle) {
+        elements.flowScrollReadToggle.checked = state.flowScrollRead;
+    }
+    if (elements.entriesList) {
+        elements.entriesList.classList.toggle('flow-mode-list', isFlow && state.activeView !== 'notes');
+    }
+    if (isFlow) {
+        renderFlowStoriesBar();
+    } else {
+        clearAllFlowDwellTimers();
+    }
+}
+
+function renderFlowStoriesBar() {
+    if (!elements.flowStoriesBar) return;
+    const isEn = (state.systemLang || 'zh') === 'en';
+    elements.flowStoriesBar.innerHTML = '';
+
+    let totalUnread = 0;
+    (state.feeds || []).forEach(f => {
+        totalUnread += f.unread_count || 0;
+    });
+
+    // 1. All Unread Story
+    const allItem = document.createElement('div');
+    allItem.className = `flow-story-item ${state.activeView === 'unread' ? 'active' : ''} ${totalUnread > 0 ? 'has-unread' : ''}`;
+    allItem.innerHTML = `
+        <div class="flow-story-ring">
+            <div class="flow-story-avatar">📬</div>
+            ${totalUnread > 0 ? `<span class="flow-story-badge">${totalUnread > 999 ? '999+' : totalUnread}</span>` : ''}
+        </div>
+        <span class="flow-story-label">${isEn ? 'All' : '全部未读'}</span>
+    `;
+    allItem.addEventListener('click', () => {
+        selectGlobalUnread();
+    });
+    elements.flowStoriesBar.appendChild(allItem);
+
+    // 2. Starred Story
+    const starItem = document.createElement('div');
+    starItem.className = `flow-story-item ${state.activeView === 'starred' ? 'active' : ''}`;
+    starItem.innerHTML = `
+        <div class="flow-story-ring">
+            <div class="flow-story-avatar">⭐</div>
+        </div>
+        <span class="flow-story-label">${isEn ? 'Starred' : '收藏'}</span>
+    `;
+    starItem.addEventListener('click', () => {
+        selectStarredView();
+    });
+    elements.flowStoriesBar.appendChild(starItem);
+
+    // 3. Enabled Feeds Stories
+    (state.feeds || []).forEach(feed => {
+        if (!feed.enabled) return;
+        const isActive = (state.activeView === 'feed' || state.activeView === 'category') && state.selectedFeedId === feed.id;
+        const unread = feed.unread_count || 0;
+        const firstChar = (feed.title || 'R').trim().charAt(0).toUpperCase();
+
+        const item = document.createElement('div');
+        item.className = `flow-story-item ${isActive ? 'active' : ''} ${unread > 0 ? 'has-unread' : ''}`;
+        item.innerHTML = `
+            <div class="flow-story-ring">
+                <div class="flow-story-avatar">${escapeHTML(firstChar)}</div>
+                ${unread > 0 ? `<span class="flow-story-badge">${unread > 999 ? '999+' : unread}</span>` : ''}
+            </div>
+            <span class="flow-story-label" title="${escapeHTML(feed.title)}">${escapeHTML(feed.title)}</span>
+        `;
+        item.addEventListener('click', () => {
+            selectFeed(feed.id);
+        });
+        elements.flowStoriesBar.appendChild(item);
+    });
+
+    if ((state.activeView === 'feed' || state.activeView === 'category') && state.selectedFeedId) {
+        renderFlowCategoriesBar(state.selectedFeedId);
+    } else if (elements.flowCategoriesBar) {
+        elements.flowCategoriesBar.classList.add('hidden');
+    }
+}
+
+async function renderFlowCategoriesBar(feedId) {
+    if (!elements.flowCategoriesBar) return;
+    const isEn = (state.systemLang || 'zh') === 'en';
+
+    const renderPills = (categories) => {
+        if (!categories || categories.length <= 1) {
+            elements.flowCategoriesBar.classList.add('hidden');
+            return;
+        }
+        elements.flowCategoriesBar.classList.remove('hidden');
+        elements.flowCategoriesBar.innerHTML = '';
+
+        const allPill = document.createElement('button');
+        allPill.className = `flow-cat-pill ${state.activeView === 'feed' && state.selectedCategoryId === null ? 'active' : ''}`;
+        allPill.textContent = isEn ? 'All' : '全部';
+        allPill.addEventListener('click', () => {
+            selectFeed(feedId);
+        });
+        elements.flowCategoriesBar.appendChild(allPill);
+
+        categories.forEach(cat => {
+            const pill = document.createElement('button');
+            pill.className = `flow-cat-pill ${state.activeView === 'category' && state.selectedCategoryId === cat.id ? 'active' : ''}`;
+            const icon = cat.is_default ? '📁' : '🏷️';
+            const unreadStr = cat.unread_count > 0 ? ` (${cat.unread_count})` : '';
+            pill.textContent = `${icon} ${cat.name}${unreadStr}`;
+            pill.addEventListener('click', () => {
+                selectCategory(feedId, cat.id, cat.name);
+            });
+            elements.flowCategoriesBar.appendChild(pill);
+        });
+    };
+
+    if (flowCategoriesCache.has(feedId)) {
+        renderPills(flowCategoriesCache.get(feedId));
+    }
+
+    try {
+        const res = await fetch(`/feeds/${feedId}/categories?t=${Date.now()}`);
+        if (res.ok) {
+            const cats = await res.json();
+            flowCategoriesCache.set(feedId, cats);
+            if (state.selectedFeedId === feedId) {
+                renderPills(cats);
+            }
+        }
+    } catch (e) {
+        console.error("Failed to load flow categories:", e);
+    }
+}
+
+function createFlowEntryCard(entry) {
+    const isEn = (state.systemLang || 'zh') === 'en';
+    const card = document.createElement('article');
+    card.className = `flow-card ${entry.is_read === 0 ? 'unread' : ''}`;
+    card.dataset.id = entry.id;
+
+    const dateStr = entry.published_at ? formatRelativeTime(entry.published_at) : '';
+    const attLevel = entry.attention || 'skim';
+    let attText = isEn ? 'Skim' : '扫读';
+    if (attLevel === 'read') attText = isEn ? 'Read' : '精读';
+    if (attLevel === 'glance') attText = isEn ? 'Glance' : '掠读';
+
+    const catBadgeHtml = (entry.category_name && entry.category_name !== '未归类')
+        ? `<span class="flow-cat-badge">🏷️ ${escapeHTML(entry.category_name)}</span>`
+        : '';
+
+    const lightClass = entry.is_read === 0 ? 'lit' : '';
+    const hasSummary = Boolean(entry.summary_content && entry.summary_content.trim());
+    const hasClickbait = Boolean(entry.clickbait_note && entry.clickbait_note.trim());
+    const isVideo = entry.likely_no_text === 1;
+    const charCount = entry.clean_char_count || 0;
+    const isShortArticle = !isVideo && charCount > 0 && charCount <= 400;
+
+    // Video or Cover Image
+    const videoHtml = getVideoPlayerHtml(entry.url || '', entry.raw_content || '');
+    let mediaHtml = '';
+    if (videoHtml) {
+        mediaHtml = `<div class="video-player-container" style="margin: 8px 0 10px;">${videoHtml}</div>`;
+    } else if (entry.cover_image) {
+        mediaHtml = `
+            <div class="flow-cover-wrap">
+                <img src="${escapeHTML(entry.cover_image)}" loading="lazy" class="flow-cover-img" alt="" onerror="this.parentElement.style.display='none'" />
+            </div>
+        `;
+    }
+
+    const snippetText = entry.snippet || '';
+    const expandLabel = charCount > 0
+        ? (isEn ? `📖 Read Full (${charCount} chars)` : `📖 展开全文 (${charCount}字)`)
+        : (isEn ? '📖 Read Full' : '📖 展开全文');
+
+    card.innerHTML = `
+        <div class="flow-card-header">
+            <div class="flow-header-left">
+                <span class="feed-badge">${escapeHTML(entry.feed_title || '')}</span>
+                ${catBadgeHtml}
+                <span class="flow-date">${escapeHTML(dateStr)}</span>
+            </div>
+            <div class="flow-header-right">
+                <span class="attention-badge ${attLevel}" style="cursor: pointer;" title="${isEn ? 'Click to switch rating' : '点击切换注意力评级'}">${attText}</span>
+                <span class="unread-indicator-light ${lightClass}" title="${entry.is_read === 0 ? '标记为已读' : '标记为未读'}"></span>
+            </div>
+        </div>
+
+        <h3 class="flow-card-title">${escapeHTML(entry.title)}</h3>
+
+        <div class="flow-clickbait-banner ${hasClickbait ? '' : 'hidden'}">
+            ⚠️ <strong>${isEn ? 'Clickbait Alert: ' : '标题党点破：'}</strong>
+            <span class="flow-clickbait-text">${escapeHTML(entry.clickbait_note || '')}</span>
+        </div>
+
+        ${mediaHtml}
+
+        <div class="flow-summary-box ${hasSummary ? '' : 'hidden'}">
+            <div class="flow-summary-header">
+                <span>✨ ${isEn ? 'AI Summary' : 'AI 智能摘要'}</span>
+                <button class="btn-compact flow-regen-summary-btn" style="padding: 1px 7px; font-size: 11px;">🔄 ${isEn ? 'Retry' : '重新生成'}</button>
+            </div>
+            <div class="flow-summary-content">${hasSummary ? renderSummaryMarkdown(entry.summary_content) : ''}</div>
+        </div>
+
+        ${snippetText ? `<div class="flow-snippet ${hasSummary && !isShortArticle ? 'compact-with-summary' : ''}">${escapeHTML(snippetText)}</div>` : ''}
+
+        <div class="flow-fulltext-area hidden" data-loaded="false"></div>
+
+        <div class="flow-inline-actions">
+            ${(!hasSummary && !isVideo) ? `<button class="flow-pill-btn flow-gen-summary-btn">✨ ${isEn ? 'AI Summary' : '生成 AI 摘要'}</button>` : ''}
+            ${(!isShortArticle && !isVideo) ? `<button class="flow-pill-btn secondary flow-expand-fulltext-btn">${expandLabel}</button>` : ''}
+        </div>
+
+        <div class="flow-card-footer">
+            <div class="flow-footer-left">
+                <button class="flow-action-btn flow-star-btn ${entry.is_starred === 1 ? 'starred' : ''}">
+                    <span>${entry.is_starred === 1 ? '★' : '☆'}</span>
+                    <span>${isEn ? 'Star' : '收藏'}</span>
+                </button>
+                <button class="flow-action-btn flow-chat-btn">
+                    <span>💬</span>
+                    <span>${isEn ? 'Ask AI' : 'AI追问'}</span>
+                </button>
+                <button class="flow-action-btn flow-detail-btn">
+                    <span>📄</span>
+                    <span>${isEn ? 'Detail' : '详情/双语'}</span>
+                </button>
+                <a href="${escapeHTML(entry.url || '#')}" target="_blank" class="flow-action-btn" rel="noopener">
+                    <span>🔗</span>
+                    <span>${isEn ? 'Source' : '原文'}</span>
+                </a>
+            </div>
+            <button class="flow-action-btn read-btn ${entry.is_read === 1 ? 'is-read' : ''}">
+                <span>${entry.is_read === 1 ? '✓' : '○'}</span>
+                <span class="read-btn-label">${entry.is_read === 1 ? (isEn ? 'Read' : '已读') : (isEn ? 'Unread' : '未读')}</span>
+            </button>
+        </div>
+    `;
+
+    // 1. Title & Detail button -> open full detail view
+    const titleEl = card.querySelector('.flow-card-title');
+    const detailBtn = card.querySelector('.flow-detail-btn');
+    titleEl.addEventListener('click', () => selectEntry(entry.id));
+    detailBtn.addEventListener('click', () => selectEntry(entry.id));
+
+    // 2. Chat button -> open detail view & immediately slide up AI Chat drawer
+    const chatBtn = card.querySelector('.flow-chat-btn');
+    chatBtn.addEventListener('click', async () => {
+        await selectEntry(entry.id);
+        const detailCol = document.getElementById('detail-column');
+        const chatSection = document.getElementById('chat-section');
+        if (detailCol) detailCol.classList.add('chat-open');
+        if (chatSection) chatSection.classList.add('open');
+        setTimeout(() => {
+            if (elements.chatInputField) elements.chatInputField.focus();
+        }, 250);
+    });
+
+    // 3. Attention badge cycle (glance -> skim -> read)
+    const attnBadge = card.querySelector('.attention-badge');
+    attnBadge.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const order = ['glance', 'skim', 'read'];
+        const cur = entry.attention || 'skim';
+        const next = order[(order.indexOf(cur) + 1) % order.length];
+        try {
+            const res = await fetch(`/entries/${entry.id}/attention`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ attention: next })
+            });
+            if (res.ok) {
+                entry.attention = next;
+                attnBadge.className = `attention-badge ${next}`;
+                if (next === 'read') attnBadge.textContent = isEn ? 'Read' : '精读';
+                else if (next === 'glance') attnBadge.textContent = isEn ? 'Glance' : '掠读';
+                else attnBadge.textContent = isEn ? 'Skim' : '扫读';
+            }
+        } catch (err) {
+            console.error("Failed to cycle attention:", err);
+        }
+    });
+
+    // 4. Star button & Double-tap anywhere on card body/image to Star
+    const starBtn = card.querySelector('.flow-star-btn');
+    const toggleCardStar = async (forceStar = false) => {
+        const isStarred = entry.is_starred === 1;
+        if (forceStar && isStarred) return;
+        const endpoint = isStarred ? `/entries/${entry.id}/unstar` : `/entries/${entry.id}/star`;
+        try {
+            const res = await fetch(endpoint, { method: 'POST' });
+            if (res.ok) {
+                entry.is_starred = isStarred ? 0 : 1;
+                starBtn.classList.toggle('starred', entry.is_starred === 1);
+                starBtn.querySelector('span:first-child').textContent = entry.is_starred === 1 ? '★' : '☆';
+                loadStarredCount();
+            }
+        } catch (err) {
+            console.error("Failed to toggle star:", err);
+        }
+    };
+    starBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleCardStar(false);
+    });
+
+    let lastTapTime = 0;
+    card.addEventListener('click', (e) => {
+        if (e.target.closest('button, a, .flow-card-title, .attention-badge, .unread-indicator-light')) return;
+        const now = Date.now();
+        if (now - lastTapTime < 280) {
+            const pop = document.createElement('div');
+            pop.className = 'flow-doubletap-star';
+            pop.textContent = '★';
+            card.appendChild(pop);
+            setTimeout(() => pop.remove(), 800);
+            toggleCardStar(true);
+            lastTapTime = 0;
+        } else {
+            lastTapTime = now;
+        }
+    });
+
+    // 5. Read / Unread toggle (both top dot and bottom button)
+    const light = card.querySelector('.unread-indicator-light');
+    const readBtn = card.querySelector('.read-btn');
+    const syncCardReadUI = () => {
+        const isRead = entry.is_read === 1;
+        card.classList.toggle('unread', !isRead);
+        light.classList.toggle('lit', !isRead);
+        readBtn.classList.toggle('is-read', isRead);
+        readBtn.querySelector('span:first-child').textContent = isRead ? '✓' : '○';
+        readBtn.querySelector('.read-btn-label').textContent = isRead
+            ? (isEn ? 'Read' : '已读')
+            : (isEn ? 'Unread' : '未读');
+        updateEntriesCountLabel();
+    };
+    const toggleCardRead = async (e) => {
+        e.stopPropagation();
+        const wasRead = entry.is_read === 1;
+        const endpoint = wasRead ? `/entries/${entry.id}/unread` : `/entries/${entry.id}/read`;
+        try {
+            const res = await fetch(endpoint, { method: 'POST' });
+            if (res.ok) {
+                entry.is_read = wasRead ? 0 : 1;
+                syncCardReadUI();
+                loadFeeds();
+            }
+        } catch (err) {
+            console.error("Failed to toggle read status:", err);
+        }
+    };
+    light.addEventListener('click', toggleCardRead);
+    readBtn.addEventListener('click', toggleCardRead);
+
+    // 6. Generate / Regenerate AI Summary in-place inside the card
+    const genSummaryBtn = card.querySelector('.flow-gen-summary-btn');
+    const regenSummaryBtn = card.querySelector('.flow-regen-summary-btn');
+    if (genSummaryBtn) {
+        genSummaryBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            streamCardSummary(entry, card, false, true);
+        });
+    }
+    if (regenSummaryBtn) {
+        regenSummaryBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            streamCardSummary(entry, card, true, true);
+        });
+    }
+
+    // 7. Expand / Collapse Fulltext in-place inside the card
+    const expandBtn = card.querySelector('.flow-expand-fulltext-btn');
+    const ftArea = card.querySelector('.flow-fulltext-area');
+    const snippetEl = card.querySelector('.flow-snippet');
+    if (expandBtn && ftArea) {
+        expandBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const isHidden = ftArea.classList.contains('hidden');
+            if (!isHidden) {
+                ftArea.classList.add('hidden');
+                if (snippetEl) snippetEl.classList.remove('hidden');
+                expandBtn.textContent = expandLabel;
+                return;
+            }
+
+            if (ftArea.dataset.loaded === 'true') {
+                ftArea.classList.remove('hidden');
+                if (snippetEl) snippetEl.classList.add('hidden');
+                expandBtn.textContent = isEn ? '🔼 Collapse' : '🔼 收起全文';
+                return;
+            }
+
+            expandBtn.disabled = true;
+            expandBtn.textContent = isEn ? '⏳ Loading...' : '⏳ 正在加载全文...';
+            try {
+                const res = await fetch(`/entries/${entry.id}/fulltext`);
+                if (res.ok) {
+                    const data = await res.json();
+                    ftArea.innerHTML = renderArticleContent(data.content || '');
+                    ftArea.dataset.loaded = 'true';
+                    ftArea.classList.remove('hidden');
+                    if (snippetEl) snippetEl.classList.add('hidden');
+                    expandBtn.textContent = isEn ? '🔼 Collapse' : '🔼 收起全文';
+                    if (entry.is_read === 0) {
+                        markFlowCardReadQuietly(entry, card);
+                    }
+                } else {
+                    expandBtn.textContent = expandLabel;
+                }
+            } catch (err) {
+                console.error("Failed to load fulltext in card:", err);
+                expandBtn.textContent = expandLabel;
+            } finally {
+                expandBtn.disabled = false;
+            }
+        });
+    }
+
+    return card;
+}
+
+function streamCardSummary(entry, card, force = false, isManual = false) {
+    const isEn = (state.systemLang || 'zh') === 'en';
+    const summaryBox = card.querySelector('.flow-summary-box');
+    const summaryContentEl = card.querySelector('.flow-summary-content');
+    const clickbaitBanner = card.querySelector('.flow-clickbait-banner');
+    const clickbaitText = card.querySelector('.flow-clickbait-text');
+    const genBtn = card.querySelector('.flow-gen-summary-btn');
+    const regenBtn = card.querySelector('.flow-regen-summary-btn');
+    const snippetEl = card.querySelector('.flow-snippet');
+
+    if (!summaryBox || !summaryContentEl) return;
+
+    // Close any existing stream for this entry
+    if (flowActiveStreams.has(entry.id)) {
+        flowActiveStreams.get(entry.id).close();
+        flowActiveStreams.delete(entry.id);
+    }
+
+    card.dataset.summaryLoading = 'true';
+    card.dataset.summaryManual = isManual ? 'true' : 'false';
+    summaryBox.classList.remove('hidden');
+    if (genBtn) genBtn.classList.add('hidden');
+    if (regenBtn) regenBtn.disabled = true;
+
+    summaryContentEl.innerHTML = `<span style="color: var(--text-muted); font-size: 13px;">⏳ ${isEn ? 'Generating AI Summary...' : '正在生成 AI 摘要...'}</span>`;
+
+    let accSummary = '';
+    const url = `/entries/${entry.id}/summary?stream=true` + (force ? '&force=true' : '');
+    const es = new EventSource(url);
+    flowActiveStreams.set(entry.id, es);
+
+    es.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            if (data.status === 'streaming') {
+                if (data.clickbait_note && clickbaitBanner && clickbaitText) {
+                    entry.clickbait_note = data.clickbait_note;
+                    clickbaitText.textContent = data.clickbait_note;
+                    clickbaitBanner.classList.remove('hidden');
+                }
+                if (data.summary) {
+                    accSummary += data.summary;
+                    entry.summary_content = accSummary;
+                    summaryContentEl.innerHTML = renderSummaryMarkdown(accSummary);
+                    if (snippetEl) snippetEl.classList.add('compact-with-summary');
+                }
+            } else if (data.status === 'done' || data.status === 'no_text' || data.status === 'error') {
+                es.close();
+                flowActiveStreams.delete(entry.id);
+                card.dataset.summaryLoading = 'false';
+                if (regenBtn) regenBtn.disabled = false;
+                if (data.status === 'no_text') {
+                    summaryContentEl.innerHTML = data.summary || (isEn ? 'No text to summarize.' : '此文章主要为多媒体内容，无需摘要。');
+                } else if (data.status === 'error') {
+                    summaryContentEl.innerHTML = `<span style="color: #ef4444;">${escapeHTML(data.detail || 'AI 摘要暂不可用')}</span>`;
+                    if (genBtn) genBtn.classList.remove('hidden');
+                }
+            }
+        } catch (err) {
+            console.error("Flow summary stream parse error:", err);
+        }
+    };
+
+    es.onerror = () => {
+        es.close();
+        flowActiveStreams.delete(entry.id);
+        card.dataset.summaryLoading = 'false';
+        if (regenBtn) regenBtn.disabled = false;
+    };
+}
+
+function observeFlowCard(card, entry) {
+    if (!flowObserver && 'IntersectionObserver' in window) {
+        flowObserver = new IntersectionObserver((entries) => {
+            entries.forEach(ioEntry => {
+                const el = ioEntry.target;
+                const eid = parseInt(el.dataset.id);
+                const item = state.entries.find(x => x.id === eid);
+                if (!item) return;
+
+                if (ioEntry.isIntersecting && ioEntry.intersectionRatio >= 0.55) {
+                    // Start 2.5s dwell timer if flowAutoSummary is enabled and entry lacks summary
+                    if (
+                        state.viewMode === 'flow' &&
+                        state.flowAutoSummary &&
+                        !item.summary_content &&
+                        el.dataset.summaryLoading !== 'true' &&
+                        item.likely_no_text !== 1 &&
+                        (item.clean_char_count === 0 || item.clean_char_count > 400)
+                    ) {
+                        if (!flowDwellTimers.has(eid)) {
+                            const timer = setTimeout(() => {
+                                flowDwellTimers.delete(eid);
+                                if (state.viewMode === 'flow' && state.flowAutoSummary && !item.summary_content) {
+                                    streamCardSummary(item, el, false, false);
+                                }
+                            }, 2500);
+                            flowDwellTimers.set(eid, timer);
+                        }
+                    }
+                } else {
+                    // Left viewport: cancel pending 2.5s dwell timer
+                    if (flowDwellTimers.has(eid)) {
+                        clearTimeout(flowDwellTimers.get(eid));
+                        flowDwellTimers.delete(eid);
+                    }
+                }
+            });
+        }, {
+            root: elements.entriesScrollContainer || null,
+            threshold: [0, 0.55]
+        });
+    }
+
+    if (flowObserver) {
+        flowObserver.observe(card);
+    }
+}
+
+function clearAllFlowDwellTimers() {
+    flowDwellTimers.forEach(timer => clearTimeout(timer));
+    flowDwellTimers.clear();
+    if (flowObserver) {
+        flowObserver.disconnect();
+    }
+}
+
+function markFlowCardReadQuietly(entry, card) {
+    if (entry.is_read === 1) return;
+    entry.is_read = 1;
+    card.classList.remove('unread');
+    const light = card.querySelector('.unread-indicator-light');
+    if (light) light.classList.remove('lit');
+    const readBtn = card.querySelector('.read-btn');
+    if (readBtn) {
+        const isEn = (state.systemLang || 'zh') === 'en';
+        readBtn.classList.add('is-read');
+        readBtn.querySelector('span:first-child').textContent = '✓';
+        readBtn.querySelector('.read-btn-label').textContent = isEn ? 'Read' : '已读';
+    }
+    updateEntriesCountLabel();
+
+    flowScrollReadQueue.add(entry.id);
+    if (!flowScrollReadFlushTimer) {
+        flowScrollReadFlushTimer = setTimeout(async () => {
+            flowScrollReadFlushTimer = null;
+            const ids = Array.from(flowScrollReadQueue);
+            flowScrollReadQueue.clear();
+            if (ids.length === 0) return;
+            try {
+                await fetch('/entries/read', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids })
+                });
+                loadFeeds();
+            } catch (err) {
+                console.error("Failed to batch mark scroll-past entries read:", err);
+            }
+        }, 1000);
+    }
+}
+
+function handleFlowScrollPastRead() {
+    if (!elements.entriesScrollContainer || !elements.entriesList) return;
+    if (state.activeView === 'starred' || state.activeView === 'notes' || state.activeView === 'search') return;
+
+    const containerRect = elements.entriesScrollContainer.getBoundingClientRect();
+    const unreadCards = elements.entriesList.querySelectorAll('.flow-card.unread');
+    unreadCards.forEach(card => {
+        const rect = card.getBoundingClientRect();
+        // When the bottom of the card scrolls above the top edge of the scroll container
+        if (rect.bottom < containerRect.top + 12) {
+            const eid = parseInt(card.dataset.id);
+            const entry = state.entries.find(x => x.id === eid);
+            if (entry && entry.is_read === 0) {
+                markFlowCardReadQuietly(entry, card);
+            }
+        }
+    });
+}
+

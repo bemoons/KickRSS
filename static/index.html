@@ -17,7 +17,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- Main Style -->
-    <link rel="stylesheet" href="style.css?v=11.4">
+    <link rel="stylesheet" href="style.css?v=12.0">
     <!-- SVG Lightning Favicon -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
 </head>
@@ -129,6 +129,10 @@
                     <button id="mark-all-read-btn" class="btn-compact" style="margin-right: 12px; display: none;" title="将当前列表中的文章全部标记为已读">
                         一键已读
                     </button>
+                    <button id="view-mode-toggle-btn" class="btn-compact view-mode-btn" style="margin-right: 10px;" title="在卡片流模式 (Instagram 样式) 与传统列表模式之间切换">
+                        <span id="view-mode-icon">📱</span>
+                        <span id="view-mode-text">卡片流</span>
+                    </button>
                     <div class="toggle-container">
                         <label class="switch">
                             <input type="checkbox" id="filter-unread-toggle" checked>
@@ -136,6 +140,22 @@
                         </label>
                         <span class="toggle-label">仅未读</span>
                     </div>
+                </div>
+            </div>
+
+            <!-- Instagram Flow Mode Navigation & Controls Bar -->
+            <div id="flow-nav-container" class="flow-nav-container hidden">
+                <div id="flow-stories-bar" class="flow-stories-bar"></div>
+                <div id="flow-categories-bar" class="flow-categories-bar hidden"></div>
+                <div class="flow-options-bar">
+                    <label class="flow-opt-item" title="卡片在屏幕中央停留 2.5 秒时自动生成 AI 摘要">
+                        <input type="checkbox" id="flow-auto-summary-toggle">
+                        <span>⏱️ 停留2.5s自动摘要</span>
+                    </label>
+                    <label class="flow-opt-item" title="向上滑动越过卡片顶部时自动标记为已读">
+                        <input type="checkbox" id="flow-scroll-read-toggle">
+                        <span>📜 滑过自动已读</span>
+                    </label>
                 </div>
             </div>
             
@@ -795,6 +815,6 @@
     </div>
 
     <!-- Main JavaScript Application -->
-    <script src="app.js?v=5.5"></script>
+    <script src="app.js?v=6.0"></script>
 </body>
 </html>

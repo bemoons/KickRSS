@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kickrss-v7';
+const CACHE_NAME = 'kickrss-v8';
 const ASSETS_TO_CACHE = [
   './style.css',
   './app.js',

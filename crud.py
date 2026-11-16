@@ -1041,6 +1041,64 @@ def get_notes_entries_count(conn: sqlite3.Connection) -> Dict[str, int]:
     total = cursor.fetchone()[0]
     return {"total_count": total}
 
+_RE_MD_IMG = re.compile(r'!\[[^\]]*\]\(\s*(https?://[^\s\)]+)')
+_RE_HTML_IMG = re.compile(r'<img[^>]+src=["\'](https?://[^"\']+)["\']', re.IGNORECASE)
+_RE_MD_IMG_RM = re.compile(r'!\[[^\]]*\]\([^\)]*\)')
+_RE_MD_LINK = re.compile(r'\[([^\]]+)\]\([^\)]+\)')
+
+def enrich_entries_with_preview(conn: sqlite3.Connection, entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if not entries:
+        return entries
+    ids = [e["id"] for e in entries if "id" in e]
+    if not ids:
+        return entries
+    placeholders = ",".join("?" for _ in ids)
+    cursor = conn.cursor()
+    cursor.execute(f"""
+        SELECT e.id,
+               COALESCE(NULLIF(ft.content, ''), e.raw_content, '') as body_text,
+               COALESCE(s.content, '') as summary_content,
+               COALESCE(s.clickbait_note, '') as clickbait_note,
+               COALESCE(c.name, '') as category_name
+        FROM entries e
+        LEFT JOIN fulltext ft ON ft.entry_id = e.id
+        LEFT JOIN summaries s ON s.entry_id = e.id
+        LEFT JOIN categories c ON c.id = e.category_id
+        WHERE e.id IN ({placeholders})
+    """, ids)
+    meta_map = {}
+    for row in cursor.fetchall():
+        eid = row["id"]
+        body_text = row["body_text"] or ""
+        m_img = _RE_MD_IMG.search(body_text) or _RE_HTML_IMG.search(body_text)
+        cover_img = m_img.group(1).strip() if m_img else ""
+        clean_text = body_text
+        if "<" in clean_text and ">" in clean_text:
+            clean_text = clean_html(clean_text)
+            if not cover_img:
+                m_img2 = _RE_MD_IMG.search(clean_text)
+                if m_img2:
+                    cover_img = m_img2.group(1).strip()
+        clean_text = _RE_MD_IMG_RM.sub("", clean_text)
+        clean_text = _RE_MD_LINK.sub(r"\1", clean_text).strip()
+        char_count = len(clean_text)
+        snippet = clean_text[:420] + "…" if char_count > 420 else clean_text
+        meta_map[eid] = {
+            "cover_image": cover_img,
+            "snippet": snippet,
+            "clean_char_count": char_count,
+            "summary_content": row["summary_content"] or "",
+            "clickbait_note": row["clickbait_note"] or "",
+            "category_name": row["category_name"] or "",
+        }
+    for e in entries:
+        m = meta_map.get(e.get("id"))
+        if m:
+            for k, v in m.items():
+                if v or k not in e:
+                    e[k] = v
+    return entries
+
 def delete_entry_chat_history(conn: sqlite3.Connection, entry_id: int) -> bool:
     cursor = conn.cursor()
     cursor.execute("DELETE FROM chat_messages WHERE entry_id = ?", (entry_id,))
