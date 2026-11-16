@@ -252,6 +252,8 @@ def get_entry_details(entry_id: int):
         if not row:
             raise HTTPException(status_code=404, detail="Entry not found")
         d = dict(row)
+        if d.get("likely_no_text") == 1 and d.get("url"):
+            d["raw_content"] = crud.ensure_video_embedded_for_entry(conn, entry_id, d["url"], d.get("raw_content", ""))
         feed = crud.get_feed_by_id(conn, d["feed_id"])
         d["feed_title"] = feed["title"] if feed else "Unknown"
         if d.get("category_id"):

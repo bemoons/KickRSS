@@ -1045,6 +1045,53 @@ _RE_MD_IMG = re.compile(r'!\[[^\]]*\]\(\s*(https?://[^\s\)]+)')
 _RE_HTML_IMG = re.compile(r'<img[^>]+src=["\'](https?://[^"\']+)["\']', re.IGNORECASE)
 _RE_MD_IMG_RM = re.compile(r'!\[[^\]]*\]\([^\)]*\)')
 _RE_MD_LINK = re.compile(r'\[([^\]]+)\]\([^\)]+\)')
+_RE_VIDEO_720P = re.compile(r'https?://[^"\'\s<>\\]+/mp4720p/[^"\'\s<>\\]+\.mp4')
+_RE_VIDEO_MP4 = re.compile(r'https?://[^"\'\s<>\\]+\.mp4')
+_RE_HUXIU_COVER = re.compile(r'https?://img\.huxiucdn\.com/article/cover/[^"\'\s<>\\]+')
+_RE_OG_IMAGE = re.compile(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\'](https?://[^"\']+)["\']', re.IGNORECASE)
+_RE_VIDEO_POSTER = re.compile(r'<video[^>]+poster=["\'](https?://[^"\']+)["\']', re.IGNORECASE)
+
+def extract_webpage_video(page_url: str):
+    if not page_url:
+        return "", ""
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            page_url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"}
+        )
+        html_str = urllib.request.urlopen(req, timeout=6).read(2 * 1024 * 1024).decode("utf-8", "ignore")
+        html_str = html_str.replace(r"\u002F", "/").replace(r"\/", "/")
+        m_v = _RE_VIDEO_720P.search(html_str) or _RE_VIDEO_MP4.search(html_str)
+        video_url = m_v.group(0) if m_v else ""
+        m_p = _RE_HUXIU_COVER.search(html_str)
+        poster_url = m_p.group(0) if m_p else ""
+        if not poster_url:
+            m_og = _RE_OG_IMAGE.search(html_str)
+            if m_og:
+                poster_url = m_og.group(1)
+        return video_url, poster_url
+    except Exception:
+        return "", ""
+
+def ensure_video_embedded_for_entry(conn: sqlite3.Connection, entry_id: int, entry_url: str, raw_content: str) -> str:
+    raw_lower = (raw_content or "").lower()
+    if "<video" in raw_lower or "<iframe" in raw_lower or not entry_url:
+        return raw_content or ""
+    url_lower = entry_url.lower()
+    if any(d in url_lower for d in ("bilibili.com", "youtube.com", "youtu.be", "vimeo.com")):
+        return raw_content or ""
+    video_url, poster_url = extract_webpage_video(entry_url)
+    if not video_url:
+        return raw_content or ""
+    if poster_url:
+        video_tag = f'<video src="{video_url}" poster="{poster_url}" controls playsinline preload="metadata"></video>'
+    else:
+        video_tag = f'<video src="{video_url}" controls playsinline preload="metadata"></video>'
+    updated_raw = f"{video_tag}\n{raw_content}" if (raw_content or "").strip() else video_tag
+    if entry_id:
+        conn.execute("UPDATE entries SET raw_content = ? WHERE id = ?", (updated_raw, entry_id))
+    return updated_raw
 
 def enrich_entries_with_preview(conn: sqlite3.Connection, entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     if not entries:
@@ -1057,6 +1104,8 @@ def enrich_entries_with_preview(conn: sqlite3.Connection, entries: List[Dict[str
     cursor.execute(f"""
         SELECT e.id,
                COALESCE(NULLIF(ft.content, ''), e.raw_content, '') as body_text,
+               COALESCE(ft.status, '') as ft_status,
+               COALESCE(e.raw_content, '') as raw_content,
                COALESCE(s.content, '') as summary_content,
                COALESCE(s.clickbait_note, '') as clickbait_note,
                COALESCE(c.name, '') as category_name
@@ -1066,13 +1115,24 @@ def enrich_entries_with_preview(conn: sqlite3.Connection, entries: List[Dict[str
         LEFT JOIN categories c ON c.id = e.category_id
         WHERE e.id IN ({placeholders})
     """, ids)
+    entry_by_id = {e["id"]: e for e in entries if "id" in e}
     meta_map = {}
+    resolved_videos = 0
     for row in cursor.fetchall():
         eid = row["id"]
         body_text = row["body_text"] or ""
-        m_img = _RE_MD_IMG.search(body_text) or _RE_HTML_IMG.search(body_text)
+        ft_status = row["ft_status"] or ""
+        raw_content = row["raw_content"] or ""
+        ent = entry_by_id.get(eid, {})
+        is_video = ent.get("likely_no_text") == 1 or ft_status == "video"
+        if is_video and "<video" not in raw_content.lower() and "<iframe" not in raw_content.lower() and resolved_videos < 4:
+            resolved_videos += 1
+            raw_content = ensure_video_embedded_for_entry(conn, eid, ent.get("url", ""), raw_content)
+
+        m_poster = _RE_VIDEO_POSTER.search(raw_content)
+        m_img = m_poster or _RE_MD_IMG.search(body_text) or _RE_HTML_IMG.search(body_text)
         cover_img = m_img.group(1).strip() if m_img else ""
-        clean_text = body_text
+        clean_text = raw_content if (is_video and raw_content.strip()) else body_text
         if "<" in clean_text and ">" in clean_text:
             clean_text = clean_html(clean_text)
             if not cover_img:
@@ -1091,6 +1151,8 @@ def enrich_entries_with_preview(conn: sqlite3.Connection, entries: List[Dict[str
             "clickbait_note": row["clickbait_note"] or "",
             "category_name": row["category_name"] or "",
         }
+        if "<video" in raw_content.lower() or "<iframe" in raw_content.lower():
+            meta_map[eid]["raw_content"] = raw_content
     for e in entries:
         m = meta_map.get(e.get("id"))
         if m:

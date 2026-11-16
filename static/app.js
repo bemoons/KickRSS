@@ -2113,7 +2113,7 @@ async function selectEntry(entryId) {
     });
     
     let entry = state.entries.find(e => e.id === entryId);
-    if (!entry || entry.raw_content === undefined) {
+    if (!entry || !entry.raw_content) {
         try {
             const response = await fetch(`/entries/${entryId}`);
             if (!response.ok) {
@@ -8016,6 +8016,8 @@ function createFlowEntryCard(entry) {
     let mediaHtml = '';
     if (videoHtml) {
         mediaHtml = `<div class="video-player-container" style="margin: 8px 0 10px;">${videoHtml}</div>`;
+    } else if (isVideo) {
+        mediaHtml = `<div class="flow-video-slot"></div>`;
     } else if (entry.cover_image) {
         mediaHtml = `
             <div class="flow-cover-wrap">
@@ -8163,7 +8165,7 @@ function createFlowEntryCard(entry) {
 
     let lastTapTime = 0;
     card.addEventListener('click', (e) => {
-        if (e.target.closest('button, a, .flow-card-title, .attention-badge, .unread-indicator-light')) return;
+        if (e.target.closest('button, a, video, iframe, .video-player-container, .flow-card-title, .attention-badge, .unread-indicator-light')) return;
         const now = Date.now();
         if (now - lastTapTime < 280) {
             const pop = document.createElement('div');
@@ -8177,6 +8179,22 @@ function createFlowEntryCard(entry) {
             lastTapTime = now;
         }
     });
+
+    // Lazy resolve video player if entry is marked as video (likely_no_text === 1) but didn't have videoHtml yet
+    const videoSlot = card.querySelector('.flow-video-slot');
+    if (videoSlot && isVideo && !videoHtml) {
+        fetch(`/entries/${entry.id}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(fullEntry => {
+                if (!fullEntry) return;
+                entry.raw_content = fullEntry.raw_content || '';
+                const resolvedVideoHtml = getVideoPlayerHtml(entry.url || '', entry.raw_content);
+                if (resolvedVideoHtml) {
+                    videoSlot.outerHTML = `<div class="video-player-container" style="margin: 8px 0 10px;">${resolvedVideoHtml}</div>`;
+                }
+            })
+            .catch(() => {});
+    }
 
     // 5. Read / Unread toggle (both top dot and bottom button)
     const light = card.querySelector('.unread-indicator-light');
