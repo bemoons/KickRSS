@@ -3383,7 +3383,8 @@ body.light-theme .flow-cat-pill {
 }
 
 #entries-list.flow-mode-list {
-    padding: 12px 10px 80px;
+    padding: 12px 10px 85vh;
+    min-height: calc(100% + 75vh);
     display: flex;
     flex-direction: column;
     gap: 14px;

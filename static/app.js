@@ -427,7 +427,7 @@ function initEventListeners() {
             }
             if (state.isLoadingMore || !state.hasMoreEntries) return;
             
-            const threshold = 100; // px from bottom to trigger fetch
+            const threshold = state.viewMode === 'flow' ? (window.innerHeight + 150) : 100; // px from bottom to trigger fetch
             const scrollTop = elements.entriesScrollContainer.scrollTop;
             const clientHeight = elements.entriesScrollContainer.clientHeight;
             const scrollHeight = elements.entriesScrollContainer.scrollHeight;
@@ -8403,12 +8403,24 @@ function handleFlowScrollPastRead() {
     if (!elements.entriesScrollContainer || !elements.entriesList) return;
     if (state.activeView === 'starred' || state.activeView === 'notes' || state.activeView === 'search') return;
 
-    const containerRect = elements.entriesScrollContainer.getBoundingClientRect();
+    const container = elements.entriesScrollContainer;
+    const containerRect = container.getBoundingClientRect();
     const unreadCards = elements.entriesList.querySelectorAll('.flow-card.unread');
+    if (unreadCards.length === 0) return;
+
+    // Check if the user has scrolled to the end of the stream (last card is in the upper 35% of viewport or scroll hit bottom)
+    const allFlowCards = elements.entriesList.querySelectorAll('.flow-card');
+    const lastCard = allFlowCards.length > 0 ? allFlowCards[allFlowCards.length - 1] : null;
+    const lastCardRect = lastCard ? lastCard.getBoundingClientRect() : null;
+    const hitStreamBottom = !state.hasMoreEntries && (
+        (container.scrollHeight - (container.scrollTop + container.clientHeight) <= 30) ||
+        (lastCardRect && lastCardRect.bottom <= containerRect.top + containerRect.height * 0.38)
+    );
+
     unreadCards.forEach(card => {
         const rect = card.getBoundingClientRect();
-        // When the bottom of the card scrolls above the top edge of the scroll container
-        if (rect.bottom < containerRect.top + 12) {
+        // Mark read when card scrolls past top edge OR when user has scrolled through the end of the stream
+        if (rect.bottom < containerRect.top + 24 || hitStreamBottom) {
             const eid = parseInt(card.dataset.id);
             const entry = state.entries.find(x => x.id === eid);
             if (entry && entry.is_read === 0) {
