@@ -421,13 +421,49 @@ async function loadSettingsOnStartup() {
 function initEventListeners() {
     // Infinite Scroll for Entries Column
     if (elements.entriesScrollContainer) {
+        let bottomTouchStartY = null;
+        let wasAtBottomOnTouchStart = false;
+
+        elements.entriesScrollContainer.addEventListener('touchstart', (e) => {
+            if (state.viewMode !== 'flow' || !state.flowScrollRead || state.hasMoreEntries) return;
+            const c = elements.entriesScrollContainer;
+            wasAtBottomOnTouchStart = (c.scrollHeight - (c.scrollTop + c.clientHeight)) <= 25;
+            if (wasAtBottomOnTouchStart && e.touches && e.touches.length === 1) {
+                bottomTouchStartY = e.touches[0].clientY;
+            } else {
+                bottomTouchStartY = null;
+            }
+        }, { passive: true });
+
+        elements.entriesScrollContainer.addEventListener('touchend', (e) => {
+            if (bottomTouchStartY === null || !wasAtBottomOnTouchStart) return;
+            if (state.viewMode !== 'flow' || !state.flowScrollRead || state.hasMoreEntries) return;
+            const endY = (e.changedTouches && e.changedTouches.length > 0) ? e.changedTouches[0].clientY : bottomTouchStartY;
+            const deltaY = bottomTouchStartY - endY;
+            bottomTouchStartY = null;
+            wasAtBottomOnTouchStart = false;
+            // Upward swipe at the bottom of the list clears remaining visible unread cards
+            if (deltaY > 40) {
+                markRemainingBottomFlowCardsRead();
+            }
+        }, { passive: true });
+
+        elements.entriesScrollContainer.addEventListener('wheel', (e) => {
+            if (state.viewMode !== 'flow' || !state.flowScrollRead || state.hasMoreEntries) return;
+            const c = elements.entriesScrollContainer;
+            const isAtBottom = (c.scrollHeight - (c.scrollTop + c.clientHeight)) <= 25;
+            if (isAtBottom && e.deltaY > 25) {
+                markRemainingBottomFlowCardsRead();
+            }
+        }, { passive: true });
+
         elements.entriesScrollContainer.addEventListener('scroll', () => {
             if (state.viewMode === 'flow' && state.flowScrollRead) {
                 handleFlowScrollPastRead();
             }
             if (state.isLoadingMore || !state.hasMoreEntries) return;
             
-            const threshold = state.viewMode === 'flow' ? (window.innerHeight + 150) : 100; // px from bottom to trigger fetch
+            const threshold = 100; // px from bottom to trigger fetch
             const scrollTop = elements.entriesScrollContainer.scrollTop;
             const clientHeight = elements.entriesScrollContainer.clientHeight;
             const scrollHeight = elements.entriesScrollContainer.scrollHeight;
@@ -1800,7 +1836,11 @@ function refreshEntriesList(appendMode = false, newAddedData = []) {
     }
     
     if (!appendMode) {
+        flowSuppressScrollReadUntil = Date.now() + 400;
         clearAllFlowDwellTimers();
+        if (elements.entriesScrollContainer) {
+            elements.entriesScrollContainer.scrollTop = 0;
+        }
         elements.entriesList.innerHTML = '';
         
         // Sort entries by published_at descending (newest first)
@@ -7793,6 +7833,7 @@ const flowActiveStreams = new Map();
 const flowCategoriesCache = new Map();
 const flowScrollReadQueue = new Set();
 let flowScrollReadFlushTimer = null;
+let flowSuppressScrollReadUntil = 0;
 
 function updateViewModeUI() {
     const isFlow = state.viewMode === 'flow';
@@ -8400,32 +8441,38 @@ function markFlowCardReadQuietly(entry, card) {
 }
 
 function handleFlowScrollPastRead() {
+    if (Date.now() < flowSuppressScrollReadUntil) return;
     if (!elements.entriesScrollContainer || !elements.entriesList) return;
     if (state.activeView === 'starred' || state.activeView === 'notes' || state.activeView === 'search') return;
 
-    const container = elements.entriesScrollContainer;
-    const containerRect = container.getBoundingClientRect();
+    const containerRect = elements.entriesScrollContainer.getBoundingClientRect();
     const unreadCards = elements.entriesList.querySelectorAll('.flow-card.unread');
     if (unreadCards.length === 0) return;
 
-    // Check if the user has scrolled to the end of the stream (last card is in the upper 35% of viewport or scroll hit bottom)
-    const allFlowCards = elements.entriesList.querySelectorAll('.flow-card');
-    const lastCard = allFlowCards.length > 0 ? allFlowCards[allFlowCards.length - 1] : null;
-    const lastCardRect = lastCard ? lastCard.getBoundingClientRect() : null;
-    const hitStreamBottom = !state.hasMoreEntries && (
-        (container.scrollHeight - (container.scrollTop + container.clientHeight) <= 30) ||
-        (lastCardRect && lastCardRect.bottom <= containerRect.top + containerRect.height * 0.38)
-    );
-
     unreadCards.forEach(card => {
         const rect = card.getBoundingClientRect();
-        // Mark read when card scrolls past top edge OR when user has scrolled through the end of the stream
-        if (rect.bottom < containerRect.top + 24 || hitStreamBottom) {
+        // When the bottom of the card scrolls above the top edge of the scroll container
+        if (rect.bottom < containerRect.top + 12) {
             const eid = parseInt(card.dataset.id);
             const entry = state.entries.find(x => x.id === eid);
             if (entry && entry.is_read === 0) {
                 markFlowCardReadQuietly(entry, card);
             }
+        }
+    });
+}
+
+function markRemainingBottomFlowCardsRead() {
+    if (Date.now() < flowSuppressScrollReadUntil) return;
+    if (!elements.entriesList) return;
+    if (state.activeView === 'starred' || state.activeView === 'notes' || state.activeView === 'search') return;
+
+    const unreadCards = elements.entriesList.querySelectorAll('.flow-card.unread');
+    unreadCards.forEach(card => {
+        const eid = parseInt(card.dataset.id);
+        const entry = state.entries.find(x => x.id === eid);
+        if (entry && entry.is_read === 0) {
+            markFlowCardReadQuietly(entry, card);
         }
     });
 }
