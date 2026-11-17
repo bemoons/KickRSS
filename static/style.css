@@ -1095,9 +1095,19 @@ body.light-theme .bar-icon-btn.star-status.starred svg {
 .ai-box-body ol li::before {
     content: none;
 }
-.ai-box-body strong {
-    color: var(--accent-indigo);
-    font-weight: 600;
+.ai-box-body strong,
+.ai-box-body b {
+    color: #fcd34d;
+    background: rgba(245, 158, 11, 0.14);
+    padding: 1px 4px;
+    border-radius: 4px;
+    font-weight: 700;
+}
+
+body.light-theme .ai-box-body strong,
+body.light-theme .ai-box-body b {
+    color: #4338ca;
+    background: rgba(99, 102, 241, 0.12);
 }
 
 /* Clickbait Banner warnings */
@@ -3524,6 +3534,32 @@ body.light-theme .flow-summary-box {
     font-size: 14px;
     line-height: 1.6;
     color: var(--text-primary);
+}
+
+.flow-summary-content strong,
+.flow-summary-content b {
+    color: #fcd34d;
+    background: rgba(245, 158, 11, 0.14);
+    padding: 1px 4px;
+    border-radius: 4px;
+    font-weight: 700;
+}
+
+body.light-theme .flow-summary-content strong,
+body.light-theme .flow-summary-content b {
+    color: #4338ca;
+    background: rgba(99, 102, 241, 0.12);
+}
+
+.flow-fulltext-area strong,
+.flow-fulltext-area b {
+    color: var(--text-inverse);
+    font-weight: 700;
+}
+
+body.light-theme .flow-fulltext-area strong,
+body.light-theme .flow-fulltext-area b {
+    color: #0f172a;
 }
 
 .flow-summary-content p {
