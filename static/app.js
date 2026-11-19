@@ -8021,7 +8021,7 @@ function createFlowEntryCard(entry) {
     } else if (entry.cover_image) {
         mediaHtml = `
             <div class="flow-cover-wrap">
-                <img src="${escapeHTML(entry.cover_image)}" loading="lazy" class="flow-cover-img" alt="" onerror="this.parentElement.style.display='none'" />
+                <img src="${escapeHTML(entry.cover_image)}" loading="lazy" referrerpolicy="no-referrer" class="flow-cover-img" alt="" onerror="this.parentElement.style.display='none'" />
             </div>
         `;
     }
